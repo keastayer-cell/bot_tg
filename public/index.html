@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вопрос</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            position: relative;
+        }
+
+        .question-box {
+            background: white;
+            width: 400px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+        }
+
+        .buttons-container {
+            position: relative;
+            display: inline-block;
+            width: 400px;
+            height: 100px;
+        }
+
+        .btn {
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.2s;
+            user-select: none;
+            border: none;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        .btn-yes {
+            left: 30px;
+            top: 20px;
+            width: 150px;
+            height: 60px;
+            background: url('yes.svg') no-repeat center/contain;
+            background-color: transparent;
+            border: none;
+        }
+
+        .btn-no {
+            left: 20px;
+            top: 30px;
+            width: 120px;
+            height: 50px;
+            background: url('no.svg') no-repeat center/contain;
+            background-color: transparent;
+            border: none;
+            z-index: 10;
+        }
+
+        .btn-yes:active, .btn-no:active {
+            transform: scale(0.95);
+        }
+
+        /* Экран грусти */
+        .sad-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #2c3e50 0%, #1a1a2e 100%);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .sad-image {
+            width: 500px;
+            max-width: 90vw;
+            cursor: pointer;
+            transition: transform 0.3s;
+            border-radius: 20px;
+        }
+
+        .sad-image:hover {
+            transform: scale(1.02);
+        }
+
+        /* Экран любви */
+        .love-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .heart {
+            font-size: 150px;
+            animation: heartbeat 1s infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes heartbeat {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .love-text {
+            font-size: 32px;
+            color: #e91e63;
+            text-align: center;
+            padding: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+        }
+
+        .hearts-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .hearts-bg span {
+            position: absolute;
+            font-size: 30px;
+            animation: fall 3s linear infinite;
+            opacity: 0.6;
+        }
+
+        @keyframes fall {
+            0% { transform: translateY(-100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Главный экран -->
+    <div class="container" id="mainScreen">
+        <div class="question-box">
+            Я Вам нравлюсь?<br>Ответь!
+        </div>
+        
+        <div class="buttons-container">
+            <button class="btn btn-yes" id="yesBtn"></button>
+            <button class="btn btn-no" id="noBtn"></button>
+        </div>
+    </div>
+
+    <!-- Экран грусти -->
+    <div class="sad-screen" id="sadScreen">
+        <img src="sad.png" alt="Грусть" class="sad-image" id="sadImage">
+    </div>
+
+    <!-- Экран любви -->
+    <div class="love-screen" id="loveScreen">
+        <div class="hearts-bg" id="heartsBg"></div>
+        <div class="heart">❤️</div>
+        <div class="love-text">Я же знал что ты хотела нажать Да :)</div>
+    </div>
+
+    <script>
+        const yesBtn = document.getElementById('yesBtn');
+        const noBtn = document.getElementById('noBtn');
+        const sadScreen = document.getElementById('sadScreen');
+        const sadImage = document.getElementById('sadImage');
+        const loveScreen = document.getElementById('loveScreen');
+        const heartsBg = document.getElementById('heartsBg');
+
+        // При наведении на Да, перемещаем Нет
+        yesBtn.addEventListener('mouseenter', () => {
+            const container = document.querySelector('.buttons-container');
+            
+            // Случайная позиция в пределах контейнера
+            const maxX = 400 - 120;
+            const maxY = 100 - 50;
+            
+            const newX = Math.random() * maxX;
+            const newY = Math.random() * maxY;
+            
+            noBtn.style.left = newX + 'px';
+            noBtn.style.top = newY + 'px';
+        });
+
+        // Нажатие на Да
+        yesBtn.addEventListener('click', () => {
+            showLove();
+        });
+
+        // Нажатие на Нет
+        noBtn.addEventListener('click', () => {
+            showSad();
+        });
+
+        // Нажатие на грустную картинку
+        sadImage.addEventListener('click', () => {
+            showLove();
+        });
+
+        function showSad() {
+            document.getElementById('mainScreen').style.display = 'none';
+            sadScreen.style.display = 'flex';
+        }
+
+        function showLove() {
+            sadScreen.style.display = 'none';
+            loveScreen.style.display = 'flex';
+            createHearts();
+        }
+
+        function createHearts() {
+            heartsBg.innerHTML = '';
+            const colors = ['❤️', '💕', '💖', '💗', '💘', '💝'];
+            
+            for (let i = 0; i < 30; i++) {
+                const heart = document.createElement('span');
+                heart.textContent = colors[Math.floor(Math.random() * colors.length)];
+                heart.style.left = Math.random() * 100 + '%';
+                heart.style.animationDelay = Math.random() * 3 + 's';
+                heart.style.animationDuration = (2 + Math.random() * 2) + 's';
+                heartsBg.appendChild(heart);
+            }
+        }
+    </script>
+</body>
+</html>
