@@ -4,6 +4,7 @@ import os
 import logging
 from datetime import datetime
 import time
+from threading import Thread
 
 # Настройка логов
 logging.basicConfig(
@@ -11,6 +12,18 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Flask для Render
+try:
+    from flask import Flask, Response
+    flask_app = Flask(__name__)
+
+    @flask_app.route('/')
+    def home():
+        return Response('Bot is running', status=200)
+except ImportError:
+    flask_app = None
+    logger.warning("Flask не установлен, веб-сервер не будет запущен")
 
 # Импорт после проверки установки
 try:
@@ -96,6 +109,13 @@ def check_time(config):
     target_time = config.get('time', "09:00")
     return current_time == target_time
 
+def run_flask():
+    """Запуск Flask сервера для Render"""
+    if flask_app:
+        # Используем порт из переменной окружения Render
+        port = int(os.environ.get('PORT', 10000))
+        flask_app.run(host='0.0.0.0', port=port)
+
 def main():
     """Главная функция"""
     config = load_config()
@@ -108,6 +128,12 @@ def main():
     bot = Bot(token=token)
     logger.info("Бот запущен. Ожидание времени...")
     
+    # Запускаем Flask в отдельном потоке
+    if flask_app:
+        flask_thread = Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        logger.info(f"Веб-сервер запущен на порту {os.environ.get('PORT', 10000)}")
+
     last_sent_date = None
     
     while True:
