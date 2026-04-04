@@ -6,3 +6,4 @@ messages.txt
 .idea/
 *.iml
 config.properties
+recipients.txt

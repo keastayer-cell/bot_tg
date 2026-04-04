@@ -40,28 +40,15 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     @PostConstruct
     public void init() {
-        log.info("Бот запущен. Получатель: {}, Время: {}", getRecipient(), getTime());
+        log.info("Бот запущен. Получатели: {}, Время: {}", getRecipients(), getTime());
     }
 
-    private String getRecipient() {
-        return config.get("recipient", "");
-    }
-
-    private String getAdminId() {
-        return config.get("admin-id", "");
-    }
-
-    private String getTime() {
-        return config.get("time", "09:00");
-    }
-
-    private String getLastSent() {
-        return config.get("last_sent", "");
-    }
-
-    private void setRecipient(String val) { config.set("recipient", val); }
+    private String getAdminId() { return config.get("admin-id", ""); }
+    private String getTime() { return config.get("time", "09:00"); }
+    private String getLastSent() { return config.get("last_sent", ""); }
     private void setTime(String val) { config.set("time", val); }
     private void setLastSent(String val) { config.set("last_sent", val); }
+    private List<String> getRecipients() { return config.getRecipients(); }
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -75,10 +62,8 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         log.info("[{}] {}", user != null ? "@" + user : chatId, text);
 
         String adminId = getAdminId();
-        String recipient = getRecipient();
-
         boolean isAdmin = String.valueOf(chatId).equals(adminId);
-        boolean isRecipient = String.valueOf(chatId).equals(recipient);
+        boolean isRecipient = getRecipients().contains(String.valueOf(chatId));
 
         if (!isAdmin && !isRecipient) {
             log.warn("Неизвестный пользователь: {}", chatId);
@@ -105,11 +90,35 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         try {
             switch (text) {
                 case "/start":
-                    sendMessage(chatId, "Привет!\n/time\n/settime\n/messages\n/add\n/recipient\n/msg\n/now\n/logs");
+                    sendMessage(chatId, "Привет, админ!\n\nКоманды:\n" +
+                        "/recipients - список получателей\n" +
+                        "/addrecipient ID - добавить\n" +
+                        "/delrecipient ID - удалить\n" +
+                        "/time - время отправки\n" +
+                        "/settime 14:00\n" +
+                        "/messages - список сообщений\n" +
+                        "/add текст\n" +
+                        "/now - отправить сейчас\n" +
+                        "/logs");
                     break;
+
+                case "/recipients":
+                    List<String> recs = getRecipients();
+                    if (recs.isEmpty()) {
+                        sendMessage(chatId, "Нет получателей!\n/addrecipient ID");
+                    } else {
+                        StringBuilder sb = new StringBuilder("Получатели:\n");
+                        for (int i = 0; i < recs.size(); i++) {
+                            sb.append(i + 1).append(". ").append(recs.get(i)).append("\n");
+                        }
+                        sendMessage(chatId, sb.toString());
+                    }
+                    break;
+
                 case "/time":
-                    sendMessage(chatId, "Время: " + getTime());
+                    sendMessage(chatId, "Время отправки: " + getTime());
                     break;
+
                 case "/messages":
                     List<String> msgs = messageService.loadMessages();
                     if (msgs.isEmpty()) sendMessage(chatId, "Пусто");
@@ -119,15 +128,15 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         sendMessage(chatId, sb.toString());
                     }
                     break;
-                case "/recipient":
-                    sendMessage(chatId, "Получатель: " + getRecipient());
-                    break;
+
                 case "/now":
                     sendNow(chatId);
                     break;
+
                 case "/logs":
                     sendLogs(chatId);
                     break;
+
                 default:
                     if (text.startsWith("/settime ")) {
                         setTime(text.substring(9));
@@ -135,12 +144,17 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     } else if (text.startsWith("/add ")) {
                         messageService.addMessage(text.substring(5));
                         sendMessage(chatId, "Добавлено");
-                    } else if (text.startsWith("/setrecipient ")) {
-                        setRecipient(text.substring(14));
-                        sendMessage(chatId, "Получатель: " + getRecipient());
+                    } else if (text.startsWith("/addrecipient ")) {
+                        config.addRecipient(text.substring(14));
+                        sendMessage(chatId, "Получатель добавлен");
+                    } else if (text.startsWith("/delrecipient ")) {
+                        config.removeRecipient(text.substring(14));
+                        sendMessage(chatId, "Получатель удалён");
                     } else if (text.startsWith("/msg ")) {
-                        sendMessage(Long.parseLong(getRecipient()), text.substring(5));
-                        sendMessage(chatId, "Отправлено");
+                        for (String r : getRecipients()) {
+                            sendMessage(Long.parseLong(r), text.substring(5));
+                        }
+                        sendMessage(chatId, "Отправлено всем");
                     }
             }
         } catch (Exception e) {
@@ -158,13 +172,20 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     }
 
     private void sendNow(Long chatId) {
+        List<String> recs = getRecipients();
+        if (recs.isEmpty()) {
+            sendMessage(chatId, "Нет получателей! Добавьте: /addrecipient ID");
+            return;
+        }
         List<String> msgs = messageService.loadMessages();
         if (msgs.isEmpty()) {
             sendMessage(chatId, "Список пуст!");
             return;
         }
         String msg = msgs.get(random.nextInt(msgs.size()));
-        sendMessage(Long.parseLong(getRecipient()), msg);
+        for (String r : recs) {
+            sendMessage(Long.parseLong(r), msg);
+        }
         msgs.remove(msg);
         messageService.saveMessages(msgs);
         sendMessage(chatId, "Отправлено: " + msg);
@@ -187,12 +208,15 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         String curDate = LocalDate.now().toString();
         String targetTime = getTime();
         String lastSent = getLastSent();
+        List<String> recs = getRecipients();
 
-        if (curTime.equals(targetTime) && !curDate.equals(lastSent)) {
+        if (curTime.equals(targetTime) && !curDate.equals(lastSent) && !recs.isEmpty()) {
             List<String> msgs = messageService.loadMessages();
             if (!msgs.isEmpty()) {
                 String msg = msgs.get(random.nextInt(msgs.size()));
-                sendMessage(Long.parseLong(getRecipient()), msg);
+                for (String r : recs) {
+                    sendMessage(Long.parseLong(r), msg);
+                }
                 msgs.remove(msg);
                 messageService.saveMessages(msgs);
                 setLastSent(curDate);
