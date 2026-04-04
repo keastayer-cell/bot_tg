@@ -6,11 +6,15 @@ from datetime import datetime, timedelta
 import requests
 from flask import Flask, request, Response
 
-# Настройка логирования
+# Логирование в файл и консоль
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler('bot.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -37,47 +41,59 @@ def send_message(chat_id, text):
     config = load_config()
     url = f"https://api.telegram.org/bot{config['token']}/sendMessage"
     result = requests.post(url, json={'chat_id': chat_id, 'text': text})
-    logger.info(f"-> Отправлено {chat_id}: {text[:50]}...")
+    logger.info(f"[ОТПРАВЛЕНО] chat_id={chat_id}: {text[:50]}")
     return result
+
+def get_user_info(chat_id, username):
+    """Краткая инфа о пользователе"""
+    if username:
+        return f"@{username} (id={chat_id})"
+    return f"id={chat_id}"
 
 def process_command(text, chat_id, username=''):
     config = load_config()
     admin_id = str(config.get('admin_id', ''))
     recipient_id = str(config.get('recipient', ''))
     
-    user_info = f"@{username}" if username else f"id:{chat_id}"
-    user_id = str(chat_id)
+    user = get_user_info(chat_id, username)
     
-    logger.info(f"<- Команда от {user_info}: {text}")
+    logger.info(f"[КОМАНДА] от {user}: {text}")
     
-    is_admin = (user_id == admin_id)
-    is_recipient = (user_id == recipient_id)
+    is_admin = (str(chat_id) == admin_id)
+    is_recipient = (str(chat_id) == recipient_id)
     
     if not is_admin and not is_recipient:
-        logger.info(f"-> {user_info}: Неизвестный пользователь, игнорируем")
+        logger.warning(f"[ОТКАЗАНО] Неизвестный пользователь {user}")
         return
     
     # Получатель
     if is_recipient and not is_admin:
         if text == '/start':
             send_message(chat_id, "Спасибо что активировали бота :) Ожидайте сообщений.")
-            logger.info(f"-> {user_info}: Получатель активирован")
+            logger.info(f"[АКТИВАЦИЯ] Получатель {user} активирован")
         else:
-            # Пересылаем сообщение админу
             admin = config.get('admin_id', '')
             try:
-                send_message(admin, f"📬 Сообщение от получателя:\n{text}")
+                send_message(admin, f"📬 Сообщение от {user}:\n{text}")
                 send_message(chat_id, "Сообщение отправлено администратору!")
-                logger.info(f"-> {admin}: Переслано от получателя")
+                logger.info(f"[ПЕРЕСЫЛКА] от {user} -> админ")
             except Exception as e:
                 send_message(chat_id, "Не удалось отправить. Попробуйте позже.")
-                logger.error(f"Ошибка пересылки: {e}")
+                logger.error(f"[ОШИБКА] Пересылка от {user}: {e}")
         return
     
     # Админ
     if text == '/start':
-        send_message(chat_id, "Привет, админ!\n\nКоманды:\n/time - время отправки\n/settime <время> - изменить\n/messages - список\n/add <текст> - добавить\n/recipient - получатель\n/setrecipient - изменить\n/now - отправить сейчас\n/msg <текст> - отправить получателю")
-        logger.info(f"-> {user_info}: Приветствие админу")
+        send_message(chat_id, "Привет, админ!\n\nКоманды:\n/time - время\n/settime <время>\n/messages\n/add <текст>\n/recipient\n/msg <текст>\n/now\n/logs")
+    
+    elif text == '/logs':
+        try:
+            with open('bot.log', 'r') as f:
+                lines = f.readlines()[-30:]
+                logs_text = ''.join(lines)
+            send_message(chat_id, f"Последние 30 строк логов:\n\n{logs_text[-3000:]}")
+        except Exception as e:
+            send_message(chat_id, f"Ошибка чтения логов: {e}")
     
     elif text.startswith('/msg '):
         msg_text = text[5:]
@@ -85,6 +101,7 @@ def process_command(text, chat_id, username=''):
         try:
             send_message(recipient, msg_text)
             send_message(chat_id, f"Отправлено: {msg_text}")
+            logger.info(f"[АДМИН->ПОЛУЧАТЕЛЬ] {user}: {msg_text[:50]}")
         except Exception as e:
             send_message(chat_id, f"Ошибка: {e}")
     
@@ -97,12 +114,13 @@ def process_command(text, chat_id, username=''):
         config['time'] = new_time
         save_config(config)
         send_message(chat_id, f"Время изменено на {new_time} (МСК)")
+        logger.info(f"[НАСТРОЙКА] {user} установил время {new_time}")
     
     elif text == '/messages':
         msgs = load_messages()
         if msgs:
             count = len(msgs)
-            send_message(chat_id, f"Сообщений в очереди: {count}\n\n" + "\n".join(f"{i+1}. {m}" for i, m in enumerate(msgs[:10])))
+            send_message(chat_id, f"Сообщений: {count}\n\n" + "\n".join(f"{i+1}. {m}" for i, m in enumerate(msgs[:10])))
         else:
             send_message(chat_id, "Список пуст!")
     
@@ -112,6 +130,7 @@ def process_command(text, chat_id, username=''):
         msgs.append(text_msg)
         save_messages(msgs)
         send_message(chat_id, f"Добавлено: {text_msg}")
+        logger.info(f"[ДОБАВЛЕНО] {user}: {text_msg[:50]}")
     
     elif text == '/recipient':
         rec = config.get('recipient', 'не указан')
@@ -121,7 +140,8 @@ def process_command(text, chat_id, username=''):
         new_rec = text[14:]
         config['recipient'] = new_rec
         save_config(config)
-        send_message(chat_id, f"Получатель изменен на {new_rec}")
+        send_message(chat_id, f"Получатель: {new_rec}")
+        logger.info(f"[НАСТРОЙКА] {user} изменил получателя на {new_rec}")
     
     elif text == '/now':
         msgs = load_messages()
@@ -134,6 +154,7 @@ def process_command(text, chat_id, username=''):
                 msgs.remove(msg)
                 save_messages(msgs)
                 send_message(chat_id, f"Отправлено: {msg}")
+                logger.info(f"[РУЧНАЯ ОТПРАВКА] {user}: {msg[:50]}")
             except Exception as e:
                 send_message(chat_id, f"Ошибка: {e}")
         else:
@@ -158,8 +179,6 @@ def check_and_send():
         recipient = config.get('recipient')
         last_sent = get_last_sent()
         
-        logger.info(f"Проверка: время={cur_time}, цель={target}, last_sent={last_sent}")
-        
         if cur_time == target and last_sent != cur_date:
             msgs = load_messages()
             if msgs:
@@ -169,11 +188,11 @@ def check_and_send():
                     msgs.remove(msg)
                     save_messages(msgs)
                     set_last_sent(cur_date)
-                    logger.info(f"=== АВТООТПРАВКА === Отправлено '{msg[:30]}...'")
+                    logger.info(f"[АВТООТПРАВКА] В {cur_time} отправлено: {msg[:50]}")
                 except Exception as e:
-                    logger.error(f"Ошибка: {e}")
+                    logger.error(f"[ОШИБКА АВТООТПРАВКИ] {e}")
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
+        logger.error(f"[ОШИБКА] {e}")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -188,10 +207,9 @@ def webhook():
             if text.startswith('/'):
                 process_command(text, chat_id, username)
             else:
-                # Обрабатываем обычные сообщения
                 process_command(text, chat_id, username)
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
+        logger.error(f"[WEBHOOK] {e}")
     return 'OK'
 
 @app.route('/')
@@ -206,14 +224,14 @@ if __name__ == '__main__':
     logger.info("=" * 50)
     logger.info("БОТ ЗАПУЩЕН")
     logger.info(f"Получатель: {config.get('recipient')}")
-    logger.info(f"Время: {config.get('time', '09:00')}")
+    logger.info(f"Время отправки: {config.get('time', '09:00')}")
     logger.info("=" * 50)
     
     railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
     if railway_url:
-        webhook_url = f"https://{railway_url}/webhook"
         try:
-            requests.post(f"https://api.telegram.org/bot{token}/setWebhook", json={'url': webhook_url})
+            requests.post(f"https://api.telegram.org/bot{token}/setWebhook", 
+                         json={'url': f"https://{railway_url}/webhook"})
         except:
             pass
     
