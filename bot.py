@@ -3,8 +3,6 @@ import random
 import os
 import logging
 from datetime import datetime
-from telegram import Bot
-from telegram.error import TelegramError
 import time
 
 # Настройка логов
@@ -14,6 +12,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Импорт после проверки установки
+try:
+    from telegram import Bot
+    from telegram.error import TelegramError
+except ImportError:
+    logger.error("python-telegram-bot не установлен! Выполни: pip install python-telegram-bot")
+    exit(1)
+
 def load_config():
     """Загрузка конфигурации"""
     with open('config.json', 'r', encoding='utf-8') as f:
@@ -22,7 +28,6 @@ def load_config():
 def load_messages():
     """Загрузка сообщений из файла"""
     if not os.path.exists('messages.txt'):
-        # Создаем файл с примером, если его нет
         with open('messages.txt', 'w', encoding='utf-8') as f:
             f.write("Доброе утро! ☀️\n")
             f.write("С добрым утром!\n")
@@ -52,9 +57,7 @@ def send_message(bot, chat_id, text):
 def get_user_id_by_username(bot, username):
     """Получение ID пользователя по username"""
     try:
-        # Убираем @ если есть
         username = username.lstrip('@')
-        # Пробуем найти пользователя через бота
         chat = bot.get_chat(f"@{username}")
         return chat.id
     except TelegramError as e:
@@ -70,15 +73,11 @@ def send_random_message(bot):
         logger.warning("Список сообщений пуст!")
         return
     
-    # Выбираем случайное сообщение
     message = random.choice(messages)
-    
-    # Получаем ID получателя
     recipient = config.get('recipient', '')
     chat_id = get_user_id_by_username(bot, recipient)
     
     if chat_id is None:
-        # Если не удалось получить по username, пробуем как chat_id
         try:
             chat_id = int(recipient)
         except ValueError:
@@ -86,7 +85,6 @@ def send_random_message(bot):
             return
     
     if send_message(bot, chat_id, message):
-        # Удаляем отправленное сообщение из списка
         messages.remove(message)
         save_messages(messages)
         logger.info(f"Сообщение удалено из списка. Осталось: {len(messages)}")
@@ -96,7 +94,6 @@ def check_time(config):
     now = datetime.now()
     current_time = now.strftime("%H:%M")
     target_time = config.get('time', "09:00")
-    
     return current_time == target_time
 
 def main():
@@ -109,26 +106,23 @@ def main():
         return
     
     bot = Bot(token=token)
-    
     logger.info("Бот запущен. Ожидание времени...")
     
     last_sent_date = None
     
     while True:
         try:
-            config = load_config()  # Перезагружаем конфиг
-            
+            config = load_config()
             now = datetime.now()
             current_date = now.strftime("%Y-%m-%d")
             
-            # Проверяем время и дату
             if check_time(config) and last_sent_date != current_date:
-                logger.info(f"Время {config.get('time', '09:00')} наступило! Отправляем сообщение...")
+                logger.info(f"Время {config.get('time', '09:00')} наступило!")
                 send_random_message(bot)
                 last_sent_date = current_date
             
-            time.sleep(30)  # Проверяем каждые 30 секунд
-            
+            time.sleep(30)
+
         except Exception as e:
             logger.error(f"Ошибка: {e}")
             time.sleep(30)
