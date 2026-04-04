@@ -2,11 +2,9 @@ import json
 import random
 import os
 import logging
-from datetime import datetime
-from threading import Thread
-import asyncio
+from datetime import datetime, time as dt_time
+import time
 
-# Настройка логов
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -23,11 +21,11 @@ try:
         return Response('Bot is running', status=200)
 except ImportError:
     flask_app = None
+    logger.warning("Flask не установлен")
 
-# Импорт telegram
 try:
     from telegram import Update
-    from telegram.ext import Application, CommandHandler, ContextTypes
+    from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue, Job
 except ImportError:
     logger.error("python-telegram-bot не установлен!")
     exit(1)
@@ -53,18 +51,18 @@ def save_messages(messages):
         for msg in messages:
             f.write(msg + '\n')
 
-# Команды бота
+# Команды
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет! Я бот для отправки утренних сообщений.\n\n"
         "Команды:\n"
-        "/time - показать время отправки\n"
-        "/settime <время> - изменить время (например /settime 10:00)\n"
-        "/messages - показать список сообщений\n"
+        "/time - время отправки\n"
+        "/settime <время> - изменить время\n"
+        "/messages - список сообщений\n"
         "/add <текст> - добавить сообщение\n"
-        "/recipient - показать получателя\n"
-        "/setrecipient <username> - изменить получателя\n"
-        "/now - отправить сообщение сейчас"
+        "/recipient - получатель\n"
+        "/setrecipient <username> - изменить\n"
+        "/now - отправить сейчас"
     )
 
 async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -75,7 +73,6 @@ async def settime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: /settime <время> (например 10:00)")
         return
-    
     new_time = context.args[0]
     config = load_config()
     config['time'] = new_time
@@ -87,19 +84,18 @@ async def messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if messages:
         text = "Список сообщений:\n" + "\n".join(f"{i+1}. {m}" for i, m in enumerate(messages))
     else:
-        text = "Список сообщений пуст!"
+        text = "Список пуст!"
     await update.message.reply_text(text)
 
 async def add_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: /add <текст>")
         return
-    
     text = " ".join(context.args)
     messages = load_messages()
     messages.append(text)
     save_messages(messages)
-    await update.message.reply_text(f"Сообщение добавлено: {text}")
+    await update.message.reply_text(f"Добавлено: {text}")
 
 async def recipient_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = load_config()
@@ -109,27 +105,22 @@ async def setrecipient_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not context.args:
         await update.message.reply_text("Использование: /setrecipient <username>")
         return
-    
     new_recipient = context.args[0]
     if not new_recipient.startswith('@'):
         new_recipient = '@' + new_recipient
-    
     config = load_config()
     config['recipient'] = new_recipient
     save_config(config)
-    await update.message.reply_text(f"Получатель изменен на {new_recipient}")
+    await update.message.reply_text(f"Получатель: {new_recipient}")
 
 async def now_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = load_config()
     messages = load_messages()
-    
     if not messages:
-        await update.message.reply_text("Список сообщений пуст!")
+        await update.message.reply_text("Список пуст!")
         return
-    
     message = random.choice(messages)
     recipient = config.get('recipient', '')
-    
     try:
         chat = await context.bot.get_chat(recipient)
         await context.bot.send_message(chat_id=chat.id, text=message)
@@ -139,40 +130,26 @@ async def now_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Ошибка: {e}")
 
-async def run_scheduler(application):
-    last_sent_date = None
+async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
+    """Планировщик - отправка по времени"""
+    config = load_config()
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    target_time = config.get('time', "09:00")
     
-    while True:
-        try:
-            config = load_config()
-            now = datetime.now()
-            current_date = now.strftime("%Y-%m-%d")
-            current_time = now.strftime("%H:%M")
-            target_time = config.get('time', "09:00")
-            
-            if current_time == target_time and last_sent_date != current_date:
-                logger.info(f"Время {target_time} наступило!")
-                
-                messages = load_messages()
-                if messages:
-                    message = random.choice(messages)
-                    recipient = config.get('recipient', '')
-                    
-                    try:
-                        chat = await application.bot.get_chat(recipient)
-                        await application.bot.send_message(chat_id=chat.id, text=message)
-                        messages.remove(message)
-                        save_messages(messages)
-                        logger.info(f"Сообщение отправлено: {message}")
-                    except Exception as e:
-                        logger.error(f"Ошибка отправки: {e}")
-                
-                last_sent_date = current_date
-            
-            await asyncio.sleep(30)
-        except Exception as e:
-            logger.error(f"Ошибка: {e}")
-            await asyncio.sleep(30)
+    if current_time == target_time:
+        messages = load_messages()
+        if messages:
+            message = random.choice(messages)
+            recipient = config.get('recipient', '')
+            try:
+                chat = await context.bot.get_chat(recipient)
+                await context.bot.send_message(chat_id=chat.id, text=message)
+                messages.remove(message)
+                save_messages(messages)
+                logger.info(f"Отправлено: {message}")
+            except Exception as e:
+                logger.error(f"Ошибка: {e}")
 
 def main():
     config = load_config()
@@ -184,6 +161,7 @@ def main():
     
     application = Application.builder().token(token).build()
     
+    # Команды
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("time", time_command))
     application.add_handler(CommandHandler("settime", settime_command))
@@ -193,28 +171,33 @@ def main():
     application.add_handler(CommandHandler("setrecipient", setrecipient_command))
     application.add_handler(CommandHandler("now", now_command))
     
+    # JobQueue - проверка каждую минуту
+    job_queue = application.job_queue
+    job_queue.run_repeating(scheduled_job, interval=60, first=10)
+    
     logger.info("Бот запущен!")
     
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    def run_async():
-        loop.run_until_complete(application.run_polling())
-    
-    def run_scheduler_async():
-        loop.run_until_complete(run_scheduler(application))
-    
-    Thread(target=run_async, daemon=True).start()
-    Thread(target=run_scheduler_async, daemon=True).start()
-    
+    # Запуск
     if flask_app:
         port = int(os.environ.get('PORT', 10000))
-        logger.info(f"Веб-сервер на порту {port}")
+        
+        # Запускаем бота в отдельном потоке
+        import threading
+        
+        def run_bot():
+            application.run_webhook(
+                listen='0.0.0.0',
+                port=port,
+                url_path='',
+                webhook_url=f"https://morning-bot-cq6d.onrender.com"
+            )
+        
+        threading.Thread(target=run_bot, daemon=True).start()
+        logger.info(f"Бот и веб на порту {port}")
+        
         flask_app.run(host='0.0.0.0', port=port)
     else:
-        while True:
-            import time
-            time.sleep(60)
+        application.run_polling()
 
 if __name__ == '__main__':
     main()
