@@ -25,7 +25,7 @@ except ImportError:
 
 try:
     from telegram import Update
-    from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue, Job
+    from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, JobQueue
 except ImportError:
     logger.error("python-telegram-bot не установлен!")
     exit(1)
@@ -159,7 +159,7 @@ def main():
         logger.error("Токен не найден!")
         return
     
-    application = Application.builder().token(token).job_queue(JobQueue()).build()
+    application = ApplicationBuilder().token(token).job_queue(True).build()
 
     # Команды
     application.add_handler(CommandHandler("start", start_command))
