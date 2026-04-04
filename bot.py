@@ -4,7 +4,6 @@ import os
 import logging
 from datetime import datetime
 import asyncio
-import aiohttp
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -179,7 +178,8 @@ async def main():
     await app.run_webhook(
         listen='0.0.0.0',
         port=port,
-        url_path='webhook'
+        url_path='',
+        webhook_url=None
     )
 
 if __name__ == '__main__':
