@@ -120,9 +120,41 @@ def process_command(text, chat_id, username=''):
             send_message(chat_id, "Список пуст!")
             logger.warning(f"-> {user_info}: Список сообщений пуст!")
 
+# Глобальная переменная для отправки
+last_sent_date = None
+
+def check_and_send():
+    """Проверка времени и отправка"""
+    global last_sent_date
+    try:
+        config = load_config()
+        now = datetime.now() + timedelta(hours=3)
+        cur_time = now.strftime("%H:%M")
+        cur_date = now.strftime("%Y-%m-%d")
+        target = config.get('time', '09:00')
+        recipient = config.get('recipient')
+
+        if cur_time == target and last_sent_date != cur_date:
+            msgs = load_messages()
+            if msgs:
+                msg = random.choice(msgs)
+                try:
+                    send_message(recipient, msg)
+                    msgs.remove(msg)
+                    save_messages(msgs)
+                    logger.info(f"=== АВТООТПРАВКА === В {cur_time} отправлено '{msg[:30]}...' получателю {recipient}. Осталось: {len(msgs)}")
+                except Exception as e:
+                    logger.error(f"=== АВТООТПРАВКА === Ошибка: {e}")
+            else:
+                logger.warning(f"=== АВТООТПРАВКА === Список пуст")
+            last_sent_date = cur_date
+    except Exception as e:
+        logger.error(f"Ошибка check_and_send: {e}")
+
 # Webhook endpoint
 @app.route('/webhook', methods=['POST'])
 def webhook():
+    check_and_send()  # Проверяем время при каждом запросе
     try:
         data = request.get_json()
         if data and 'message' in data:
