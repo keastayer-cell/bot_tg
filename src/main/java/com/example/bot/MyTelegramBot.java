@@ -29,27 +29,39 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     @Value("${bot.username}")
     private String username;
 
-    @Value("${bot.recipient}")
-    private String recipient;
-
-    @Value("${bot.admin-id}")
-    private String adminId;
-
-    @Value("${bot.time:09:00}")
-    private String time;
-
-    private String lastSent = "";
+    private final ConfigService config;
     private final MessageService messageService;
     private final Random random = new Random();
 
-    public MyTelegramBot(MessageService messageService) {
+    public MyTelegramBot(ConfigService config, MessageService messageService) {
+        this.config = config;
         this.messageService = messageService;
     }
 
     @PostConstruct
     public void init() {
-        log.info("Бот запущен. Получатель: {}, Время: {}", recipient, time);
+        log.info("Бот запущен. Получатель: {}, Время: {}", getRecipient(), getTime());
     }
+
+    private String getRecipient() {
+        return config.get("recipient", "");
+    }
+
+    private String getAdminId() {
+        return config.get("admin-id", "");
+    }
+
+    private String getTime() {
+        return config.get("time", "09:00");
+    }
+
+    private String getLastSent() {
+        return config.get("last_sent", "");
+    }
+
+    private void setRecipient(String val) { config.set("recipient", val); }
+    private void setTime(String val) { config.set("time", val); }
+    private void setLastSent(String val) { config.set("last_sent", val); }
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -62,6 +74,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         log.info("[{}] {}", user != null ? "@" + user : chatId, text);
 
+        String adminId = getAdminId();
+        String recipient = getRecipient();
+
         boolean isAdmin = String.valueOf(chatId).equals(adminId);
         boolean isRecipient = String.valueOf(chatId).equals(recipient);
 
@@ -71,13 +86,13 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         }
 
         if (isRecipient && !isAdmin) {
-            handleRecipient(chatId, text);
+            handleRecipient(chatId, text, adminId);
         } else if (isAdmin) {
             handleAdmin(chatId, text);
         }
     }
 
-    private void handleRecipient(Long chatId, String text) {
+    private void handleRecipient(Long chatId, String text, String adminId) {
         if (text.equals("/start")) {
             sendMessage(chatId, "Спасибо что активировали бота :) Ожидайте сообщений.");
         } else {
@@ -93,7 +108,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     sendMessage(chatId, "Привет!\n/time\n/settime\n/messages\n/add\n/recipient\n/msg\n/now\n/logs");
                     break;
                 case "/time":
-                    sendMessage(chatId, "Время: " + time);
+                    sendMessage(chatId, "Время: " + getTime());
                     break;
                 case "/messages":
                     List<String> msgs = messageService.loadMessages();
@@ -105,7 +120,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     }
                     break;
                 case "/recipient":
-                    sendMessage(chatId, "Получатель: " + recipient);
+                    sendMessage(chatId, "Получатель: " + getRecipient());
                     break;
                 case "/now":
                     sendNow(chatId);
@@ -115,16 +130,16 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     break;
                 default:
                     if (text.startsWith("/settime ")) {
-                        time = text.substring(9);
-                        sendMessage(chatId, "Время: " + time);
+                        setTime(text.substring(9));
+                        sendMessage(chatId, "Время: " + getTime());
                     } else if (text.startsWith("/add ")) {
                         messageService.addMessage(text.substring(5));
                         sendMessage(chatId, "Добавлено");
                     } else if (text.startsWith("/setrecipient ")) {
-                        recipient = text.substring(14);
-                        sendMessage(chatId, "Получатель: " + recipient);
+                        setRecipient(text.substring(14));
+                        sendMessage(chatId, "Получатель: " + getRecipient());
                     } else if (text.startsWith("/msg ")) {
-                        sendMessage(Long.parseLong(recipient), text.substring(5));
+                        sendMessage(Long.parseLong(getRecipient()), text.substring(5));
                         sendMessage(chatId, "Отправлено");
                     }
             }
@@ -149,7 +164,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             return;
         }
         String msg = msgs.get(random.nextInt(msgs.size()));
-        sendMessage(Long.parseLong(recipient), msg);
+        sendMessage(Long.parseLong(getRecipient()), msg);
         msgs.remove(msg);
         messageService.saveMessages(msgs);
         sendMessage(chatId, "Отправлено: " + msg);
@@ -170,15 +185,17 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         LocalTime now = LocalTime.now().plusHours(3);
         String curTime = now.format(DateTimeFormatter.ofPattern("HH:mm"));
         String curDate = LocalDate.now().toString();
+        String targetTime = getTime();
+        String lastSent = getLastSent();
 
-        if (curTime.equals(time) && !curDate.equals(lastSent)) {
+        if (curTime.equals(targetTime) && !curDate.equals(lastSent)) {
             List<String> msgs = messageService.loadMessages();
             if (!msgs.isEmpty()) {
                 String msg = msgs.get(random.nextInt(msgs.size()));
-                sendMessage(Long.parseLong(recipient), msg);
+                sendMessage(Long.parseLong(getRecipient()), msg);
                 msgs.remove(msg);
                 messageService.saveMessages(msgs);
-                lastSent = curDate;
+                setLastSent(curDate);
                 log.info("[АВТООТПРАВКА] {}", msg);
             }
         }

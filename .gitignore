@@ -5,3 +5,4 @@ messages.txt
 .DS_Store
 .idea/
 *.iml
+config.properties
