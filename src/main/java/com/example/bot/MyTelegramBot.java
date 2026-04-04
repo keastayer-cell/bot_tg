@@ -151,10 +151,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private void sendMessage(Long chatId, String text) {
         try {
-            SendMessage message = new SendMessage();
-            message.setChatId(chatId.toString());
-            message.setText(text);
-            execute(message);
+            execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
         } catch (TelegramApiException e) {
             log.error("Ошибка отправки: {}", e.getMessage());
         }
