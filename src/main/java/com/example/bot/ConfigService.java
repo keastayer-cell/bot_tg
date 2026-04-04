@@ -1,5 +1,6 @@
 package com.example.bot;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.*;
@@ -10,6 +11,9 @@ public class ConfigService {
     private final String configFile = "config.properties";
     private Properties props = new Properties();
 
+    @Value("${admin-chat-id:}")
+    private String adminChatIdFromEnv;
+
     public ConfigService() {
         load();
     }
@@ -18,7 +22,16 @@ public class ConfigService {
         try (InputStream in = new FileInputStream(configFile)) {
             props.load(in);
         } catch (IOException e) {
-            // Файла нет, используем значения по умолчанию
+            // Файла нет
+        }
+    }
+
+    public void init() {
+        if (adminChatIdFromEnv != null && !adminChatIdFromEnv.isEmpty()) {
+            if (props.getProperty("admin-id") == null || props.getProperty("admin-id").isEmpty()) {
+                props.setProperty("admin-id", adminChatIdFromEnv);
+                save();
+            }
         }
     }
 
