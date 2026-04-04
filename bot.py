@@ -42,16 +42,53 @@ def send_message(chat_id, text):
     return result
 
 def process_command(text, chat_id, username=''):
+    config = load_config()
+    admin_id = str(config.get('admin_id', ''))
+    recipient_id = str(config.get('recipient', ''))
+
     now = datetime.now() + timedelta(hours=3)
     time_str = now.strftime('%Y-%m-%d %H:%M:%S')
     
     user_info = f"@{username}" if username else f"id:{chat_id}"
+    user_id = str(chat_id)
+
     logger.info(f"<- Команда от {user_info}: {text}")
     
+    # Проверяем админ или получатель
+    is_admin = (user_id == admin_id) or (user_info.replace('@', '') == admin_id.replace('@', ''))
+    is_recipient = (user_id == recipient_id) or (user_info.replace('@', '') == recipient_id.replace('@', ''))
+
+    # Если не админ и не получатель — игнорируем
+    if not is_admin and not is_recipient:
+        logger.info(f"-> {user_info}: Неизвестный пользователь, игнорируем")
+        return
+
+    # Получатель может только /start
+    if is_recipient and not is_admin:
+        if text == '/start':
+            send_message(chat_id, "Спасибо! Вы подписаны на получение утренних сообщений. Ждите! 🌅")
+            logger.info(f"-> {user_info}: Получатель активирован")
+        else:
+            send_message(chat_id, "У вас нет доступа к командам. Ждите сообщений! 😊")
+            logger.info(f"-> {user_info}: Получатель попытался использовать команду")
+        return
+
+    # Админ
     if text == '/start':
-        send_message(chat_id, "Привет! Команды:\n/time\n/settime <время>\n/messages\n/add <текст>\n/recipient\n/setrecipient\n/now")
-        logger.info(f"-> {user_info}: Отправлено приветствие")
-    
+        send_message(chat_id, "Привет, админ! Команды:\n/time\n/settime <время>\n/messages\n/add <текст>\n/recipient\n/setrecipient\n/now\n/setadmin")
+        logger.info(f"-> {user_info}: Отправлено приветствие админу")
+
+    elif text == '/setadmin':
+        send_message(chat_id, f"Ваш ID: {user_id}\nИспользуйте /setadmin {user_id} для подтверждения")
+        logger.info(f"-> {user_info}: Показан ID")
+
+    elif text.startswith('/setadmin '):
+        new_admin = text.split(' ')[1]
+        config['admin_id'] = new_admin
+        save_config(config)
+        send_message(chat_id, f"Админ изменен на {new_admin}")
+        logger.info(f"-> {user_info}: Установлен админ {new_admin}")
+
     elif text == '/time':
         config = load_config()
         t = config.get('time', '09:00')
@@ -168,38 +205,9 @@ def webhook():
         logger.error(f"Ошибка webhook: {e}")
     return 'OK'
 
-# Проверка времени (Москва UTC+3)
-last_sent_date = None
-
 @app.route('/')
 def home():
-    global last_sent_date
-    
-    try:
-        config = load_config()
-        now = datetime.now() + timedelta(hours=3)
-        cur_time = now.strftime("%H:%M")
-        cur_date = now.strftime("%Y-%m-%d")
-        target = config.get('time', '09:00')
-        recipient = config.get('recipient')
-        
-        if cur_time == target and last_sent_date != cur_date:
-            msgs = load_messages()
-            if msgs:
-                msg = random.choice(msgs)
-                try:
-                    send_message(recipient, msg)
-                    msgs.remove(msg)
-                    save_messages(msgs)
-                    logger.info(f"=== АВТООТПРАВКА === В {cur_time} отправлено '{msg[:30]}...' получателю {recipient}. Осталось: {len(msgs)}")
-                except Exception as e:
-                    logger.error(f"=== АВТООТПРАВКА === Ошибка: {e}")
-            else:
-                logger.warning(f"=== АВТООТПРАВКА === Список пуст, отправка пропущена")
-            last_sent_date = cur_date
-    except Exception as e:
-        logger.error(f"Ошибка: {e}")
-    
+    check_and_send()  # Проверяем время при каждом запросе
     return Response('OK', status=200)
 
 if __name__ == '__main__':
