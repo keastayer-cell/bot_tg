@@ -2,7 +2,7 @@ import json
 import random
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import requests
 from flask import Flask, request, Response
@@ -98,7 +98,7 @@ def webhook():
         logger.error(f"Ошибка: {e}")
     return 'OK'
 
-# Проверка времени
+# Проверка времени (Москва UTC+3)
 last_sent_date = None
 
 @app.route('/')
@@ -107,7 +107,7 @@ def home():
     
     try:
         config = load_config()
-        now = datetime.now()
+        now = datetime.now() + timedelta(hours=3)  # Москва UTC+3
         cur_time = now.strftime("%H:%M")
         cur_date = now.strftime("%Y-%m-%d")
         target = config.get('time', '09:00')
