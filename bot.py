@@ -135,5 +135,19 @@ def home():
     return Response('OK', status=200)
 
 if __name__ == '__main__':
+    # Устанавливаем webhook при запуске
+    config = load_config()
+    bot = Bot(token=config['token'])
+
+    # Получаем URL из переменной окружения Railway
+    railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+    if railway_url:
+        webhook_url = f"https://{railway_url}/webhook"
+        try:
+            bot.set_webhook(url=webhook_url)
+            logger.info(f"Webhook установлен: {webhook_url}")
+        except Exception as e:
+            logger.error(f"Ошибка webhook: {e}")
+
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
