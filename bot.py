@@ -160,6 +160,20 @@ def process_command(text, chat_id, username=''):
 # Глобальная переменная для отправки
 last_sent_date = None
 
+def load_last_sent():
+    try:
+        with open('last_sent.json', 'r') as f:
+            return json.load(f).get('date')
+    except:
+        return None
+
+def save_last_sent(date):
+    with open('last_sent.json', 'w') as f:
+        json.dump({'date': date}, f)
+
+# Загружаем при старте
+last_sent_date = load_last_sent()
+
 def check_and_send():
     """Проверка времени и отправка"""
     global last_sent_date
