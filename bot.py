@@ -8,8 +8,8 @@ import time
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from telegram import Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters
+from telegram import Bot, Update
+from telegram.ext import Application, CommandHandler
 
 def load_config():
     with open('config.json', 'r') as f:
@@ -28,37 +28,37 @@ def save_messages(messages):
         for m in messages:
             f.write(m + '\n')
 
-def start(update, context):
-    update.message.reply_text("Привет! Команды:\n/time\n/settime <время>\n/messages\n/add <текст>\n/recipient\n/setrecipient\n/now")
+async def start(update, context):
+    await update.message.reply_text("Привет! Команды:\n/time\n/settime <время>\n/messages\n/add <текст>\n/recipient\n/setrecipient\n/now")
 
-def time_cmd(update, context):
+async def time_cmd(update, context):
     config = load_config()
-    update.message.reply_text(f"Время: {config.get('time', '09:00')}")
+    await update.message.reply_text(f"Время: {config.get('time', '09:00')}")
 
-def settime(update, context):
+async def settime(update, context):
     if context.args:
         config = load_config()
         config['time'] = context.args[0]
         save_config(config)
-        update.message.reply_text(f"Время: {config['time']}")
+        await update.message.reply_text(f"Время: {config['time']}")
 
-def messages_cmd(update, context):
+async def messages_cmd(update, context):
     msgs = load_messages()
-    update.message.reply_text("Список:\n" + "\n".join(f"{i+1}. {m}" for i, m in enumerate(msgs)) if msgs else "Пусто!")
+    await update.message.reply_text("Список:\n" + "\n".join(f"{i+1}. {m}" for i, m in enumerate(msgs)) if msgs else "Пусто!")
 
-def add_msg(update, context):
+async def add_msg(update, context):
     if context.args:
         text = " ".join(context.args)
         msgs = load_messages()
         msgs.append(text)
         save_messages(msgs)
-        update.message.reply_text(f"Добавлено: {text}")
+        await update.message.reply_text(f"Добавлено: {text}")
 
-def recipient_cmd(update, context):
+async def recipient_cmd(update, context):
     config = load_config()
-    update.message.reply_text(f"Получатель: {config.get('recipient')}")
+    await update.message.reply_text(f"Получатель: {config.get('recipient')}")
 
-def setrecipient(update, context):
+async def setrecipient(update, context):
     if context.args:
         new_rec = context.args[0]
         if not new_rec.startswith('@'):
@@ -66,73 +66,47 @@ def setrecipient(update, context):
         config = load_config()
         config['recipient'] = new_rec
         save_config(config)
-        update.message.reply_text(f"Получатель: {new_rec}")
+        await update.message.reply_text(f"Получатель: {new_rec}")
 
-def now_cmd(update, context):
+async def now_cmd(update, context):
     config = load_config()
     msgs = load_messages()
     if msgs:
         msg = random.choice(msgs)
         try:
-            context.bot.send_message(chat_id=config['recipient'], text=msg)
+            await context.bot.send_message(chat_id=config['recipient'], text=msg)
             msgs.remove(msg)
             save_messages(msgs)
-            update.message.reply_text(f"Отправлено: {msg}")
+            await update.message.reply_text(f"Отправлено: {msg}")
         except Exception as e:
-            update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Ошибка: {e}")
     else:
-        update.message.reply_text("Список пуст!")
+        await update.message.reply_text("Список пуст!")
 
-# Планировщик
-last_sent_date = None
-
-def scheduled_send(bot):
-    global last_sent_date
-    
-    while True:
-        try:
-            config = load_config()
-            now = datetime.now()
-            cur_time = now.strftime("%H:%M")
-            cur_date = now.strftime("%Y-%m-%d")
-            target = config.get('time', '09:00')
-            
-            if cur_time == target and last_sent_date != cur_date:
-                msgs = load_messages()
-                if msgs:
-                    msg = random.choice(msgs)
-                    try:
-                        bot.send_message(chat_id=config['recipient'], text=msg)
-                        msgs.remove(msg)
-                        save_messages(msgs)
-                        logger.info(f"Отправлено: {msg}")
-                    except Exception as e:
-                        logger.error(f"Ошибка: {e}")
-                last_sent_date = cur_date
-        except Exception as e:
-            logger.error(f"Ошибка: {e}")
-        
-        time.sleep(30)
-
-if __name__ == '__main__':
+# Главная функция
+async def main():
     config = load_config()
+    app = Application.builder().token(config['token']).build()
     
-    updater = Updater(token=config['token'])
-    dp = updater.dispatcher
-    
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("time", time_cmd))
-    dp.add_handler(CommandHandler("settime", settime))
-    dp.add_handler(CommandHandler("messages", messages_cmd))
-    dp.add_handler(CommandHandler("add", add_msg))
-    dp.add_handler(CommandHandler("recipient", recipient_cmd))
-    dp.add_handler(CommandHandler("setrecipient", setrecipient))
-    dp.add_handler(CommandHandler("now", now_cmd))
-    
-    # Запускаем планировщик
-    import threading
-    threading.Thread(target=scheduled_send, args=(updater.bot,), daemon=True).start()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("time", time_cmd))
+    app.add_handler(CommandHandler("settime", settime))
+    app.add_handler(CommandHandler("messages", messages_cmd))
+    app.add_handler(CommandHandler("add", add_msg))
+    app.add_handler(CommandHandler("recipient", recipient_cmd))
+    app.add_handler(CommandHandler("setrecipient", setrecipient))
+    app.add_handler(CommandHandler("now", now_cmd))
     
     logger.info("Бот запущен!")
-    updater.start_polling(drop_pending_updates=True)
-    updater.idle()
+    
+    # Используем webhook
+    await app.run_webhook(
+        listen='0.0.0.0',
+        port=int(os.environ.get('PORT', 8080)),
+        url_path='webhook',
+        webhook_url=None  # Без webhook URL
+    )
+
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(main())
