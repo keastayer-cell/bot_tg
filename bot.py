@@ -159,8 +159,8 @@ def main():
         logger.error("Токен не найден!")
         return
     
-    application = Application.builder().token(token).build()
-    
+    application = Application.builder().token(token).job_queue(JobQueue()).build()
+
     # Команды
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("time", time_command))
