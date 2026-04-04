@@ -8,6 +8,8 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import javax.annotation.PostConstruct;
@@ -15,6 +17,7 @@ import java.io.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -61,9 +64,14 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         log.info("[{}] {}", user != null ? "@" + user : chatId, text);
 
+        String chatIdStr = String.valueOf(chatId);
+        String userName = msg.getFrom().getUserName();
+        String userNameWithAt = userName != null ? "@" + userName : null;
+
         String adminId = getAdminId();
-        boolean isAdmin = String.valueOf(chatId).equals(adminId);
-        boolean isRecipient = getRecipients().contains(String.valueOf(chatId));
+        boolean isAdmin = chatIdStr.equals(adminId);
+        boolean isRecipient = getRecipients().contains(chatIdStr) ||
+                              (userNameWithAt != null && getRecipients().contains(userNameWithAt));
 
         if (!isAdmin && !isRecipient) {
             log.warn("Неизвестный пользователь: {}", chatId);
@@ -71,28 +79,51 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         }
 
         if (isRecipient && !isAdmin) {
-            handleRecipient(chatId, text, adminId);
+            handleRecipient(chatIdStr, text, adminId);
         } else if (isAdmin) {
-            handleAdmin(chatId, text);
+            handleAdmin(chatIdStr, text);
         }
     }
 
-    private void handleRecipient(Long chatId, String text, String adminId) {
+    private void handleRecipient(String chatId, String text, String adminId) {
         if (text.equals("/start")) {
-            sendMessage(chatId, "Спасибо что активировали бота :) Ожидайте сообщений.");
+            sendMessageWithKeyboard(chatId, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬", adminId);
         } else {
-            sendMessage(Long.parseLong(adminId), "📬 От " + chatId + ":\n" + text);
+            sendMessage(adminId, "📬 От " + chatId + ":\n" + text);
             sendMessage(chatId, "Отправлено админу!");
         }
     }
 
-    private void handleAdmin(Long chatId, String text) {
+    private void sendMessageWithKeyboard(String chatId, String text, String adminId) {
+        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(InlineKeyboardButton.builder().text("📬 Написать админу").callbackData("write_admin").build());
+        rows.add(row);
+
+        keyboard.setKeyboard(rows);
+
+        try {
+            execute(SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .replyMarkup(keyboard)
+                .parseMode("Markdown")
+                .build());
+        } catch (TelegramApiException e) {
+            log.error("Ошибка отправки: {}", e.getMessage());
+        }
+    }
+
+    private void handleAdmin(String chatId, String text) {
         try {
             switch (text) {
                 case "/start":
                     sendMessage(chatId, "Привет, админ!\n\nКоманды:\n" +
                         "/recipients - список получателей\n" +
-                        "/addrecipient ID - добавить\n" +
+                        "/addrecipient ID - добавить по ID\n" +
+                        "/addrecipient @nick - добавить по нику\n" +
                         "/delrecipient ID - удалить\n" +
                         "/time - время отправки\n" +
                         "/settime 14:00\n" +
@@ -105,7 +136,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 case "/recipients":
                     List<String> recs = getRecipients();
                     if (recs.isEmpty()) {
-                        sendMessage(chatId, "Нет получателей!\n/addrecipient ID");
+                        sendMessage(chatId, "Нет получателей!\n/addrecipient ID или @nick");
                     } else {
                         StringBuilder sb = new StringBuilder("Получатели:\n");
                         for (int i = 0; i < recs.size(); i++) {
@@ -145,14 +176,20 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         messageService.addMessage(text.substring(5));
                         sendMessage(chatId, "Добавлено");
                     } else if (text.startsWith("/addrecipient ")) {
-                        config.addRecipient(text.substring(14));
-                        sendMessage(chatId, "Получатель добавлен");
+                        String recipient = text.substring(14).trim();
+                        // Автоматически добавить @ если нет
+                        if (!recipient.startsWith("@") && !recipient.matches("^\\d+$")) {
+                            recipient = "@" + recipient;
+                        }
+                        config.addRecipient(recipient);
+                        sendMessage(chatId, "Получатель добавлен: " + recipient);
                     } else if (text.startsWith("/delrecipient ")) {
                         config.removeRecipient(text.substring(14));
                         sendMessage(chatId, "Получатель удалён");
                     } else if (text.startsWith("/msg ")) {
+                        String msgText = text.substring(5);
                         for (String r : getRecipients()) {
-                            sendMessage(Long.parseLong(r), text.substring(5));
+                            sendMessage(r, msgText);
                         }
                         sendMessage(chatId, "Отправлено всем");
                     }
@@ -163,18 +200,18 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessage(Long chatId, String text) {
+    private void sendMessage(String chatId, String text) {
         try {
-            execute(SendMessage.builder().chatId(chatId.toString()).text(text).build());
+            execute(SendMessage.builder().chatId(chatId).text(text).build());
         } catch (TelegramApiException e) {
             log.error("Ошибка отправки: {}", e.getMessage());
         }
     }
 
-    private void sendNow(Long chatId) {
+    private void sendNow(String chatId) {
         List<String> recs = getRecipients();
         if (recs.isEmpty()) {
-            sendMessage(chatId, "Нет получателей! Добавьте: /addrecipient ID");
+            sendMessage(chatId, "Нет получателей! Добавьте: /addrecipient ID или @nick");
             return;
         }
         List<String> msgs = messageService.loadMessages();
@@ -184,14 +221,14 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         }
         String msg = msgs.get(random.nextInt(msgs.size()));
         for (String r : recs) {
-            sendMessage(Long.parseLong(r), msg);
+            sendMessage(r, msg);
         }
         msgs.remove(msg);
         messageService.saveMessages(msgs);
         sendMessage(chatId, "Отправлено: " + msg);
     }
 
-    private void sendLogs(Long chatId) {
+    private void sendLogs(String chatId) {
         try (BufferedReader r = new BufferedReader(new FileReader("bot.log"))) {
             StringBuilder sb = new StringBuilder();
             String line; int n = 0;
@@ -215,7 +252,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             if (!msgs.isEmpty()) {
                 String msg = msgs.get(random.nextInt(msgs.size()));
                 for (String r : recs) {
-                    sendMessage(Long.parseLong(r), msg);
+                    sendMessage(r, msg);
                 }
                 msgs.remove(msg);
                 messageService.saveMessages(msgs);
