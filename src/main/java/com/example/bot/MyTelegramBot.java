@@ -90,18 +90,27 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         if (msg.hasText() && (msg.getText().equals("/start") || msg.getText().equals("🚀 Старт"))) {
             if (isAdmin) {
                 // Админ - показываем все команды
-                sendMessageWithKeyboard(chatIdStr, "Привет, админ!\n\nКоманды:\n" +
-                    "/recipients - список получателей\n" +
-                    "/addrecipient ID - добавить по ID\n" +
-                    "/addrecipient @nick - добавить по нику\n" +
-                    "/delrecipient ID - удалить\n" +
+                sendMessageWithKeyboard(chatIdStr, "Привет, админ!\n\n" +
+                    "📋 *Получатели:*\n" +
+                    "/recipients - список\n" +
+                    "/addrecipient ID/@nick - добавить\n" +
+                    "/delrecipient ID - удалить\n\n" +
+                    "⏰ *Рассылка:*\n" +
                     "/time - время отправки\n" +
                     "/settime 14:00\n" +
-                    "/add текст - добавить в очередь\n" +
+                    "/now - отправить сейчас\n\n" +
+                    "📝 *Очередь:*\n" +
+                    "/add текст - добавить текст\n" +
                     "/queue - показать очередь\n" +
-                    "/fillqueue - заполнить очередь\n" +
-                    "/stats - статистика\n" +
-                    "/now - отправить сейчас\n" +
+                    "/fillqueue - заполнить\n" +
+                    "/stats - статистика\n\n" +
+                    "🖼 *Картинки:*\n" +
+                    "Отправь фото боту - добавить\n" +
+                    "/images - список\n" +
+                    "/sendimage N - отправить №N\n" +
+                    "/sendimageall - всем\n\n" +
+                    "📜 *Прочее:*\n" +
+                    "/messages - тексты\n" +
                     "/logs");
             } else {
                 // Обычный пользователь - подписываем на рассылку
