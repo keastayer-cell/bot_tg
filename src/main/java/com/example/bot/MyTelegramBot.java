@@ -83,25 +83,43 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         String userName = msg.getFrom().getUserName();
         String userNameWithAt = userName != null ? "@" + userName : null;
 
-        // Обработка /start для ВСЕХ пользователей - добавляем в получатели
+        String adminId = getAdminId();
+        boolean isAdmin = chatIdStr.equals(adminId);
+
+        // Обработка /start - для админа показываем команды, для обычных - подписка
         if (msg.hasText() && (msg.getText().equals("/start") || msg.getText().equals("🚀 Старт"))) {
-            if (userName != null) {
-                config.replaceRecipient(userName, chatIdStr);
+            if (isAdmin) {
+                // Админ - показываем все команды
+                sendMessageWithKeyboard(chatIdStr, "Привет, админ!\n\nКоманды:\n" +
+                    "/recipients - список получателей\n" +
+                    "/addrecipient ID - добавить по ID\n" +
+                    "/addrecipient @nick - добавить по нику\n" +
+                    "/delrecipient ID - удалить\n" +
+                    "/time - время отправки\n" +
+                    "/settime 14:00\n" +
+                    "/add текст - добавить в очередь\n" +
+                    "/queue - показать очередь\n" +
+                    "/fillqueue - заполнить очередь\n" +
+                    "/stats - статистика\n" +
+                    "/now - отправить сейчас\n" +
+                    "/logs");
             } else {
-                config.addRecipient(chatIdStr);
+                // Обычный пользователь - подписываем на рассылку
+                if (userName != null) {
+                    config.replaceRecipient(userName, chatIdStr);
+                } else {
+                    config.addRecipient(chatIdStr);
+                }
+                sendMessageWithKeyboard(chatIdStr, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
             }
-            sendMessageWithKeyboard(chatIdStr, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
             return;
         }
 
-        String adminId = getAdminId();
-        boolean isAdmin = chatIdStr.equals(adminId);
         boolean isRecipient = getRecipients().contains(chatIdStr) ||
                               (userNameWithAt != null && getRecipients().contains(userNameWithAt));
 
         if (!isAdmin && !isRecipient) {
             if (msg.hasText()) {
-                // Неизвестный пользователь - не логируем
                 sendMessageWithKeyboard(chatIdStr, "Извините, вы не участник бота.\nСвяжитесь с администратором.");
             }
             return;
@@ -116,7 +134,6 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         if (!msg.hasText()) return;
 
         String text = msg.getText();
-        // Логируем только важные действия
 
         if (isRecipient && !isAdmin) {
             handleRecipient(chatIdStr, userNameWithAt, text, adminId);
@@ -188,22 +205,6 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     private void handleAdmin(String chatId, String text) {
         try {
             switch (text) {
-                case "/start":
-                    sendMessageWithKeyboard(chatId, "Привет, админ!\n\nКоманды:\n" +
-                        "/recipients - список получателей\n" +
-                        "/addrecipient ID - добавить по ID\n" +
-                        "/addrecipient @nick - добавить по нику\n" +
-                        "/delrecipient ID - удалить\n" +
-                        "/time - время отправки\n" +
-                        "/settime 14:00\n" +
-                        "/add текст - добавить в очередь\n" +
-                        "/queue - показать очередь\n" +
-                        "/fillqueue - заполнить очередь\n" +
-                        "/stats - статистика\n" +
-                        "/now - отправить сейчас\n" +
-                        "/logs");
-                    break;
-
                 case "/recipients":
                     
                     if (getRecipients().isEmpty()) {
@@ -472,9 +473,4 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     @Override public String getBotUsername() { return username; }
     @Override public String getBotToken() { return token; }
-
-    // Для webhook - вызывает ту же логику что и onUpdateReceived
-    public void onWebhookUpdateReceived(Update update) {
-        onUpdateReceived(update);
-    }
 }
