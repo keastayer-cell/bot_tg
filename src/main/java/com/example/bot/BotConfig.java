@@ -7,6 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.meta.api.methods.SetWebhook;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
@@ -19,20 +20,25 @@ public class BotConfig {
     public CommandLineRunner registerBot(MyTelegramBot bot, 
             @Value("${railway.public-url:}") String railwayUrl) {
         return args -> {
-            // Если есть Railway URL - НЕ запускаем Long Polling (используем webhook)
-            if (railwayUrl != null && !railwayUrl.isEmpty()) {
-                log.info("Используем Webhook - Long Polling не запускаем");
-                return;
-            }
-            
-            // Иначе - запускаем Long Polling
             try {
                 TelegramBotsApi api = new TelegramBotsApi(DefaultBotSession.class);
+
+                // Если есть Railway URL - устанавливаем webhook
+                if (railwayUrl != null && !railwayUrl.isEmpty()) {
+                    SetWebhook webhook = SetWebhook.builder()
+                        .url(railwayUrl + "/webhook")
+                        .build();
+                    bot.execute(webhook);
+                    log.info("Webhook установлен: {}/webhook", railwayUrl);
+                }
+
+                // Регистрируем бота (запустится Long Polling, но webhook перехватит)
                 api.registerBot(bot);
-                log.info("Бот запущен с Long Polling");
+                log.info("Бот зарегистрирован");
+
             } catch (TelegramApiException e) {
                 log.error("Ошибка регистрации бота: {}", e.getMessage());
-                throw new RuntimeException(e);
+                // Не вызываем исключение - пусть работает с webhook
             }
         };
     }
