@@ -15,6 +15,8 @@ public class BotApplication {
     private static final Logger log = LoggerFactory.getLogger(BotApplication.class);
 
     public static void main(String[] args) {
+        // Устанавливаем московский часовой пояс
+        System.setProperty("user.timezone", "Europe/Moscow");
         SpringApplication.run(BotApplication.class, args);
     }
 
