@@ -10,11 +10,20 @@ import java.util.List;
 
 @Component
 public class MessageService {
-    private static final String MESSAGES_FILE = "/app/data/messages.txt";
+    private String messagesFile;
+
+    public MessageService() {
+        String dataDir = "/app/data";
+        if (new File(dataDir).exists()) {
+            messagesFile = dataDir + "/messages.txt";
+        } else {
+            messagesFile = "messages.txt";
+        }
+    }
 
     public List<String> loadMessages() {
         List<String> messages = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader(MESSAGES_FILE))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(messagesFile))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (!line.trim().isEmpty()) messages.add(line.trim());
@@ -26,7 +35,7 @@ public class MessageService {
     }
 
     public void saveMessages(List<String> messages) {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(MESSAGES_FILE))) {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(messagesFile))) {
             for (String msg : messages) writer.println(msg);
         } catch (IOException e) {
             e.printStackTrace();

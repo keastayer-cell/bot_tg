@@ -8,19 +8,25 @@ import java.util.*;
 
 @Component
 public class QueueService {
-    private static final String QUEUE_FILE = "/app/data/queue.txt";
+    private String queueFile;
     private final MessageService messageService;
     private final ImageService imageService;
     private final Random random = new Random();
 
     public QueueService(MessageService messageService, ImageService imageService) {
+        String dataDir = "/app/data";
+        if (new File(dataDir).exists()) {
+            queueFile = dataDir + "/queue.txt";
+        } else {
+            queueFile = "queue.txt";
+        }
         this.messageService = messageService;
         this.imageService = imageService;
     }
 
     public List<QueueItem> loadQueue() {
         List<QueueItem> queue = new ArrayList<>();
-        try (BufferedReader r = new BufferedReader(new FileReader(QUEUE_FILE))) {
+        try (BufferedReader r = new BufferedReader(new FileReader(queueFile))) {
             String line;
             while ((line = r.readLine()) != null) {
                 QueueItem item = QueueItem.fromString(line.trim());
@@ -33,7 +39,7 @@ public class QueueService {
     }
 
     public void saveQueue(List<QueueItem> queue) {
-        try (PrintWriter w = new PrintWriter(new FileWriter(QUEUE_FILE))) {
+        try (PrintWriter w = new PrintWriter(new FileWriter(queueFile))) {
             for (QueueItem item : queue) {
                 w.println(item.toString());
             }

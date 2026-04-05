@@ -8,14 +8,24 @@ import java.util.*;
 
 @Component
 public class ConfigService {
-    protected String configFile = "/app/data/config.properties";
-    protected String recipientsFile = "/app/data/recipients.txt";
+    protected String configFile;
+    protected String recipientsFile;
     private Properties props = new Properties();
 
     @Value("${admin-chat-id:}")
     private String adminChatIdFromEnv;
 
     public ConfigService() {
+        String dataDir = "/app/data";
+        if (new File(dataDir).exists()) {
+            configFile = dataDir + "/config.properties";
+            recipientsFile = dataDir + "/recipients.txt";
+            System.out.println("Использую persistent storage: " + dataDir);
+        } else {
+            configFile = "config.properties";
+            recipientsFile = "recipients.txt";
+            System.out.println("Volume не найден, использую локальные файлы");
+        }
         load();
     }
 

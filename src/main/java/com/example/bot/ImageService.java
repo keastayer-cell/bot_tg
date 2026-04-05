@@ -15,11 +15,19 @@ import java.util.UUID;
 public class ImageService {
 
     private static final Logger log = LoggerFactory.getLogger(ImageService.class);
-    private static final String IMAGES_DIR = "/app/data/images";
-    private static final String IMAGES_INDEX = "/app/data/images_index.txt";
+    private String imagesDir;
+    private String imagesIndex;
 
     public ImageService() {
-        new File(IMAGES_DIR).mkdirs();
+        String dataDir = "/app/data";
+        if (new File(dataDir).exists()) {
+            imagesDir = dataDir + "/images";
+            imagesIndex = dataDir + "/images_index.txt";
+        } else {
+            imagesDir = "images";
+            imagesIndex = "images_index.txt";
+        }
+        new File(imagesDir).mkdirs();
     }
 
     public String saveImage(Message message, String fileId, String fileExtension) {
@@ -38,7 +46,7 @@ public class ImageService {
     }
 
     public void saveToIndex(String fileName, String fileId) {
-        try (PrintWriter w = new PrintWriter(new FileWriter(IMAGES_INDEX, true))) {
+        try (PrintWriter w = new PrintWriter(new FileWriter(imagesIndex, true))) {
             w.println(fileName + "=" + fileId);
         } catch (IOException e) {
             e.printStackTrace();
@@ -46,7 +54,7 @@ public class ImageService {
     }
 
     public String getFileId(String fileName) {
-        try (BufferedReader r = new BufferedReader(new FileReader(IMAGES_INDEX))) {
+        try (BufferedReader r = new BufferedReader(new FileReader(imagesIndex))) {
             String line;
             while ((line = r.readLine()) != null) {
                 String[] parts = line.split("=", 2);
@@ -64,9 +72,9 @@ public class ImageService {
         List<String> names = new ArrayList<>();
 
         // Сначала проверяем индексный файл (где хранятся fileId)
-        File indexFile = new File(IMAGES_INDEX);
+        File indexFile = new File(imagesIndex);
         if (indexFile.exists()) {
-            try (BufferedReader r = new BufferedReader(new FileReader(IMAGES_INDEX))) {
+            try (BufferedReader r = new BufferedReader(new FileReader(imagesIndex))) {
                 String line;
                 while ((line = r.readLine()) != null) {
                     if (line.contains("=")) {
@@ -79,7 +87,7 @@ public class ImageService {
         }
 
         // Также проверяем папку с файлами
-        File dir = new File(IMAGES_DIR);
+        File dir = new File(imagesDir);
         File[] files = dir.listFiles((d, name) -> !name.startsWith("."));
         if (files != null) {
             for (File f : files) {
@@ -99,7 +107,7 @@ public class ImageService {
         }
         
         // Fallback: читаем из файла
-        File file = new File(IMAGES_DIR + "/" + fileName);
+        File file = new File(imagesDir + "/" + fileName);
         if (file.exists()) {
             InputFile inputFile = new InputFile();
             inputFile.setMedia(file, fileName);
