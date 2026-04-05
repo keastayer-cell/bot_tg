@@ -54,7 +54,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     @PostConstruct
     public void init() {
-        log.info("Бот запущен. Получатели: {}, Время: {}", getRecipients(), getTime());
+        log.info("Бот запущен");
     }
 
     private String getAdminId() { return config.get("admin-id", ""); }
@@ -81,7 +81,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         if (!isAdmin && !isRecipient) {
             if (msg.hasText()) {
-                log.warn("Неизвестный пользователь: {}", chatId);
+                // Неизвестный пользователь - не логируем
                 sendMessageWithKeyboard(chatIdStr, "Извините, вы не участник бота.\nСвяжитесь с администратором.");
             }
             return;
