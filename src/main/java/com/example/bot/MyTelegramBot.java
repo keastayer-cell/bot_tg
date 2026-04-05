@@ -113,19 +113,14 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     "/messages - тексты\n" +
                     "/logs");
             } else {
-                // Обычный пользователь - подписываем на рассылку
-                if (userName != null) {
-                    config.replaceRecipient(userName, chatIdStr);
-                } else {
-                    config.addRecipient(chatIdStr);
-                }
+                // Обычный пользователь - подписываем по chatId
+                config.addRecipient(chatIdStr);
                 sendMessageWithKeyboard(chatIdStr, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
             }
             return;
         }
 
-        boolean isRecipient = getRecipients().contains(chatIdStr) ||
-                              (userNameWithAt != null && getRecipients().contains(userNameWithAt));
+        boolean isRecipient = getRecipients().contains(chatIdStr);
 
         if (!isAdmin && !isRecipient) {
             if (msg.hasText()) {
