@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
@@ -181,23 +182,22 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         "/delrecipient ID - удалить\n" +
                         "/time - время отправки\n" +
                         "/settime 14:00\n" +
-                        "/messages - список сообщений\n" +
-                        "/add текст\n" +
+                        "/add текст - добавить в очередь\n" +
+                        "/queue - показать очередь\n" +
+                        "/fillqueue - заполнить очередь\n" +
+                        "/stats - статистика\n" +
                         "/now - отправить сейчас\n" +
-                        "/images - список картинок\n" +
-                        "/sendimage N - отправить картинку #N\n" +
-                        "/sendimageall - все картинки\n" +
                         "/logs");
                     break;
 
                 case "/recipients":
-                    List<String> recs = getRecipients();
-                    if (recs.isEmpty()) {
+                    
+                    if (getRecipients().isEmpty()) {
                         sendMessage(chatId, "Нет получателей!\n/addrecipient ID или @nick", "admin-recipients-empty");
                     } else {
                         StringBuilder sb = new StringBuilder("Получатели:\n");
-                        for (int i = 0; i < recs.size(); i++) {
-                            sb.append(i + 1).append(". ").append(recs.get(i)).append("\n");
+                        for (int i = 0; i < getRecipients().size(); i++) {
+                            sb.append(i + 1).append(". ").append(getRecipients().get(i)).append("\n");
                         }
                         sendMessage(chatId, sb.toString(), "admin-recipients-list");
                     }
@@ -238,22 +238,43 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
                 case "/sendimageall":
                     List<String> imgs = imageService.getImageNames();
-                    List<String> recs = getRecipients();
+                    
                     if (imgs.isEmpty()) {
                         sendMessage(chatId, "Нет картинок для отправки");
-                    } else if (recs.isEmpty()) {
+                    } else if (getRecipients().isEmpty()) {
                         sendMessage(chatId, "Нет получателей");
                     } else {
                         for (String imgName : imgs) {
                             InputFile img = imageService.getImageInputFile(imgName);
                             if (img != null) {
-                                for (String r : recs) {
+                                for (String r : getRecipients()) {
                                     sendPhoto(r, img);
                                 }
                             }
                         }
                         sendMessage(chatId, "Отправлено " + imgs.size() + " картинок всем получателям");
                     }
+                    break;
+
+                case "/queue":
+                    sendMessage(chatId, queueService.getQueueList());
+                    break;
+
+                case "/fillqueue":
+                    queueService.addFromTextsAndImages();
+                    int qSize = queueService.getQueueSize();
+                    sendMessage(chatId, "Очередь заполнена! Всего в очереди: " + qSize);
+                    break;
+
+                case "/stats":
+                    int txtCount = queueService.getTextCount();
+                    int imgCount = queueService.getImageCount();
+                    int queueCount = queueService.getQueueSize();
+                    sendMessage(chatId, "Статистика:\n" +
+                        "Текстов: " + txtCount + "\n" +
+                        "Картинок: " + imgCount + "\n" +
+                        "В очереди: " + queueCount + "\n\n" +
+                        "Отправь /fillqueue чтобы заполнить очередь из текстов и картинок");
                     break;
 
                 default:
@@ -272,12 +293,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         }
                         String imgName = allImages.get(idx);
                         InputFile img = imageService.getImageInputFile(imgName);
-                        List<String> recipients = getRecipients();
-                        if (recipients.isEmpty()) {
+                        
+                        if (getRecipients().isEmpty()) {
                             sendMessage(chatId, "Нет получателей");
                             return;
                         }
-                        for (String r : recipients) {
+                        for (String r : getRecipients()) {
                             sendPhoto(r, img);
                         }
                         sendMessage(chatId, "Отправлено: " + imgName);
@@ -305,8 +326,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         setTime(newTime);
                         sendMessage(chatId, "Время: " + getTime());
                     } else if (text.startsWith("/add ")) {
-                        messageService.addMessage(text.substring(5));
-                        sendMessage(chatId, "Добавлено");
+                        String txt = text.substring(5);
+                        queueService.addText(txt);
+                        sendMessage(chatId, "Добавлено в очередь! Всего: " + queueService.getQueueSize());
                     } else if (text.startsWith("/addrecipient ")) {
                         String recipient = text.substring(14).trim();
                         // Автоматически добавить @ если нет
@@ -363,8 +385,8 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     }
 
     private void sendNow(String chatId) {
-        List<String> recs = getRecipients();
-        if (recs.isEmpty()) {
+        
+        if (getRecipients().isEmpty()) {
             sendMessage(chatId, "Нет получателей! Добавьте: /addrecipient ID или @nick");
             return;
         }
@@ -379,7 +401,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 return;
             }
             String msg = msgs.get(random.nextInt(msgs.size()));
-            for (String r : recs) {
+            for (String r : getRecipients()) {
                 sendMessage(r, msg);
             }
             msgs.remove(msg);
@@ -387,7 +409,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             sendMessage(chatId, "Отправлено: " + msg);
         } else {
             // Отправляем из очереди
-            for (String r : recs) {
+            for (String r : getRecipients()) {
                 if (item.type == QueueItem.Type.TEXT) {
                     sendMessage(r, item.content);
                 } else if (item.type == QueueItem.Type.IMAGE) {
@@ -417,12 +439,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         String curMinute = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         String targetTime = getTime();
         String lastSent = getLastSent();
-        List<String> recs = getRecipients();
+        
 
         log.info("[ПЛАНИРОВЩИК] Текущее: {}, Цель: {}, Последняя отправка: {}, Получателей: {}",
-            curMinute, targetTime, lastSent, recs.size());
+            curMinute, targetTime, lastSent, getRecipients().size());
 
-        if (curTime.equals(targetTime) && !curMinute.equals(lastSent) && !recs.isEmpty()) {
+        if (curTime.equals(targetTime) && !curMinute.equals(lastSent) && !getRecipients().isEmpty()) {
             // Пытаемся взять из очереди
             QueueItem item = queueService.popRandom();
 
@@ -431,7 +453,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 List<String> msgs = messageService.loadMessages();
                 if (!msgs.isEmpty()) {
                     String msg = msgs.get(random.nextInt(msgs.size()));
-                    for (String r : recs) {
+                    for (String r : getRecipients()) {
                         sendMessage(r, msg);
                     }
                     msgs.remove(msg);
@@ -441,7 +463,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 }
             } else {
                 // Отправляем из очереди (текст или картинку)
-                for (String r : recs) {
+                for (String r : getRecipients()) {
                     if (item.type == QueueItem.Type.TEXT) {
                         sendMessage(r, item.content);
                     } else if (item.type == QueueItem.Type.IMAGE) {
