@@ -334,9 +334,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         sendMessage(chatId, "Добавлено в очередь! Всего: " + queueService.getQueueSize());
                     } else if (text.startsWith("/addrecipient ")) {
                         String recipient = text.substring(14).trim();
-                        // Автоматически добавить @ если нет
-                        if (!recipient.startsWith("@") && !recipient.matches("^\\d+$")) {
-                            recipient = "@" + recipient;
+                        // Только числа - chatId
+                        if (!recipient.matches("^\\d+$")) {
+                            sendMessage(chatId, "Введите chat ID: /addrecipient 123456789");
+                            return;
                         }
                         config.addRecipient(recipient);
                         sendMessage(chatId, "Получатель добавлен: " + recipient);
