@@ -93,8 +93,8 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 sendMessageWithKeyboard(chatIdStr, "Привет, админ!\n\n" +
                     "📋 *Получатели:*\n" +
                     "/recipients - список\n" +
-                    "/addrecipient ID/@nick - добавить\n" +
-                    "/delrecipient ID - удалить\n\n" +
+                    "/addrecipient 123456789 - добавить по ID\n" +
+                    "/delrecipient 123456789 - удалить\n\n" +
                     "⏰ *Рассылка:*\n" +
                     "/time - время отправки\n" +
                     "/settime 14:00\n" +
