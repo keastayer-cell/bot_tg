@@ -300,21 +300,6 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                             sendPhoto(r, img);
                         }
                         sendMessage(chatId, "Отправлено: " + imgName);
-                    } else if (text.equals("🚀 Старт")) {
-                        // Показываем команды
-                        sendMessageWithKeyboard(chatId, "Команды админа:\n" +
-                            "/recipients - список получателей\n" +
-                            "/addrecipient ID - добавить по ID\n" +
-                            "/addrecipient @nick - добавить по нику\n" +
-                            "/delrecipient ID - удалить\n" +
-                            "/time - время отправки\n" +
-                            "/settime 14:00\n" +
-                            "/add текст - добавить в очередь\n" +
-                            "/queue - показать очередь\n" +
-                            "/fillqueue - заполнить очередь\n" +
-                            "/stats - статистика\n" +
-                            "/now - отправить сейчас\n" +
-                            "/logs");
                     } else if (text.equals("📬 Админу")) {
                         sendMessage(chatId, "Вы админ! Используйте команды для рассылки.\n/add текст - добавить сообщение\n/now - отправить сейчас");
                         break;
