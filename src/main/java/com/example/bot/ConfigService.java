@@ -1,53 +1,38 @@
 package com.example.bot;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.io.*;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.stream.Collectors;
 
 @Component
 public class ConfigService {
-    protected String configFile;
-    protected String recipientsFile;
     private Properties props = new Properties();
 
     @Value("${admin-chat-id:}")
     private String adminChatIdFromEnv;
 
-    public ConfigService() {
-        String dataDir = "/app/data";
-        if (new File(dataDir).exists()) {
-            configFile = dataDir + "/config.properties";
-            recipientsFile = dataDir + "/recipients.txt";
-            System.out.println("Использую persistent storage: " + dataDir);
-        } else {
-            configFile = "config.properties";
-            recipientsFile = "recipients.txt";
-            System.out.println("Volume не найден, использую локальные файлы");
-        }
-        load();
-    }
-
-    public void load() {
-        try (InputStream in = new FileInputStream(configFile)) {
-            props.load(in);
-        } catch (IOException e) {
-            // Файла нет
-        }
-    }
+    @Autowired
+    private RecipientRepository recipientRepository;
 
     public void init() {
         if (adminChatIdFromEnv != null && !adminChatIdFromEnv.isEmpty()) {
             if (props.getProperty("admin-id") == null || props.getProperty("admin-id").isEmpty()) {
                 props.setProperty("admin-id", adminChatIdFromEnv);
-                save();
             }
         }
     }
 
-    public void save() {
-        saveProperties();
+    public String getAdminId() {
+        return props.getProperty("admin-id");
+    }
+
+    public void setAdminId(String adminId) {
+        props.setProperty("admin-id", adminId);
     }
 
     public String get(String key, String defaultValue) {
@@ -56,78 +41,36 @@ public class ConfigService {
 
     public void set(String key, String value) {
         props.setProperty(key, value);
-        saveProperties();
-    }
-
-    private synchronized void saveProperties() {
-        try (PrintWriter w = new PrintWriter(new FileWriter(configFile))) {
-            w.println("#Bot Config");
-            for (String k : props.stringPropertyNames()) {
-                w.println(k + "=" + props.getProperty(k));
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // Работа с получателями
-    public List<String> getRecipients() {
-        List<String> list = new ArrayList<>();
-        try (BufferedReader r = new BufferedReader(new FileReader(recipientsFile))) {
-            String line;
-            while ((line = r.readLine()) != null) {
-                if (!line.trim().isEmpty()) list.add(line.trim());
-            }
-        } catch (IOException e) {
-            // Файла нет
-        }
-        return list;
-    }
-
-    public void addRecipient(String id) {
-        List<String> list = getRecipients();
-        if (!list.contains(id)) {
-            list.add(id);
-            saveRecipients(list);
-        }
-    }
-
-    public void removeRecipient(String id) {
-        List<String> list = getRecipients();
-        list.remove(id);
-        saveRecipients(list);
-    }
-
-    public void replaceRecipient(String oldValue, String newValue) {
-        List<String> list = getRecipients();
-        boolean changed = false;
-
-        if (list.remove(oldValue)) {
-            changed = true;
-        }
-        if (!list.contains(newValue)) {
-            list.add(newValue);
-            changed = true;
-        }
-
-        if (changed) {
-            saveRecipients(list);
-        }
-    }
-
-    public String getTimezone() {
-        return get("timezone", "Europe/Moscow");
     }
 
     public void setTimezone(String timezone) {
-        set("timezone", timezone);
+        props.setProperty("timezone", timezone);
     }
 
-    private synchronized void saveRecipients(List<String> list) {
-        try (PrintWriter w = new PrintWriter(new FileWriter(recipientsFile))) {
-            for (String s : list) w.println(s);
-        } catch (IOException e) {
-            e.printStackTrace();
+    public List<String> getRecipients() {
+        return recipientRepository.findAll().stream()
+                .map(Recipient::getUsername)
+                .collect(Collectors.toList());
+    }
+
+    public void addRecipient(String username) {
+        if (recipientRepository.findByUsername(username).isEmpty()) {
+            Recipient recipient = new Recipient();
+            recipient.setUsername(username);
+            recipientRepository.save(recipient);
         }
+    }
+
+    public void removeRecipient(String username) {
+        Optional<Recipient> recipient = recipientRepository.findByUsername(username);
+        recipient.ifPresent(recipientRepository::delete);
+    }
+
+    public boolean isRecipient(String username) {
+        return recipientRepository.findByUsername(username).isPresent();
+    }
+
+    public String getTimezone() {
+        return "Europe/Moscow"; // Default
     }
 }
