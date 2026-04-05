@@ -65,7 +65,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     private String getAdminId() {
         String fromConfig = config.get("admin-id", "");
         String result = (fromConfig != null && !fromConfig.isEmpty()) ? fromConfig : (adminChatId != null ? adminChatId : "");
-        log.debug("getAdminId() -> fromConfig='{}', adminChatId='{}', result='{}'", fromConfig, adminChatId, result);
+        if (result.isEmpty()) {
+            log.error("🔴 CRITICAL: adminId is EMPTY! fromConfig='{}', adminChatId='{}'. Check ADMIN_CHAT_ID env var!",
+                     fromConfig, adminChatId);
+        }
         return result;
     }
     private String getTime() { return config.get("time", "09:00"); }
@@ -86,6 +89,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         String adminId = getAdminId();
         boolean isAdmin = chatIdStr.equals(adminId);
+        
+        // DEBUG: логируем каждое обновление чтобы видеть что происходит
+        if (msg.hasText()) {
+            log.warn("🔍 UPDATE: chatId={}, adminId={}, isAdmin={}, text={}", 
+                     chatIdStr, adminId, isAdmin, msg.getText());
+        }
 
         // Обработка /start - для админа показываем команды, для обычных - подписка
         if (msg.hasText() && (msg.getText().equals("/start") || msg.getText().equals("🚀 Старт"))) {
@@ -215,6 +224,13 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private void handleAdmin(String chatId, String text, boolean isAdmin, String userNameWithAt) {
         try {
+            if (!isAdmin) {
+                log.warn("⚠ handleAdmin called but isAdmin=false! chatId={}, text={}", chatId, text);
+                return;
+            }
+            
+            log.info("✓ АДМИН команда обработана: {}", text);
+            
             if (text.equals("/admin")) {
                 sendMessage(chatId, isAdmin ? "Вы админ" : "Вы не админ");
             } else if (text.equals("/recipients")) {
