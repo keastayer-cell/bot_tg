@@ -58,7 +58,23 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     @PostConstruct
     public void init() {
-        log.info("Бот инициализирован");
+        log.warn("🔵 === BOT INITIALIZATION ===");
+        log.warn("token={}", token == null ? "NULL!" : (token.isEmpty() ? "EMPTY!" : "OK"));
+        log.warn("username={}", username == null ? "NULL!" : (username.isEmpty() ? "EMPTY!" : "OK"));
+        log.warn("adminChatId={}", adminChatId == null ? "NULL!" : (adminChatId.isEmpty() ? "EMPTY!" : adminChatId));
+        
+        if (token == null || token.isEmpty()) {
+            log.error("🔴 CRITICAL: BOT_TOKEN is empty! Bot will NOT work!");
+            log.error("Set environment variable: BOT_TOKEN=<your_token_from_botfather>");
+            return;
+        }
+        if (username == null || username.isEmpty()) {
+            log.error("🔴 CRITICAL: BOT_USERNAME is empty! Bot will NOT work!");
+            log.error("Set environment variable: BOT_USERNAME=<botname_without_@>");
+            return;
+        }
+        
+        log.info("✓ Бот инициализирован успешно");
     }
 
 
@@ -79,22 +95,26 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        Message msg = update.getMessage();
-        if (msg == null) return;
+        try {
+            Message msg = update.getMessage();
+            if (msg == null) {
+                log.warn("⚠ Update with NULL message received (maybe callback query?)");
+                return;
+            }
 
-        Long chatId = msg.getChatId();
-        String chatIdStr = String.valueOf(chatId);
-        String userName = msg.getFrom().getUserName();
-        String userNameWithAt = userName != null ? "@" + userName : null;
+            Long chatId = msg.getChatId();
+            String chatIdStr = String.valueOf(chatId);
+            String userName = msg.getFrom().getUserName();
+            String userNameWithAt = userName != null ? "@" + userName : null;
 
-        String adminId = getAdminId();
-        boolean isAdmin = chatIdStr.equals(adminId);
-        
-        // DEBUG: логируем каждое обновление чтобы видеть что происходит
-        if (msg.hasText()) {
-            log.warn("🔍 UPDATE: chatId={}, adminId={}, isAdmin={}, text={}", 
-                     chatIdStr, adminId, isAdmin, msg.getText());
-        }
+            String adminId = getAdminId();
+            boolean isAdmin = chatIdStr.equals(adminId);
+            
+            // DEBUG: логируем каждое обновление чтобы видеть что происходит
+            if (msg.hasText()) {
+                log.warn("🔍 UPDATE: chatId={}, adminId={}, isAdmin={}, text={}", 
+                         chatIdStr, adminId, isAdmin, msg.getText());
+            }
 
         // Обработка /start - для админа показываем команды, для обычных - подписка
         if (msg.hasText() && (msg.getText().equals("/start") || msg.getText().equals("🚀 Старт"))) {
@@ -159,6 +179,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         } else if (isAdmin) {
             log.info("АДМИН {} отправил команду: {}", chatIdStr, text);
             handleAdmin(chatIdStr, text, isAdmin, userNameWithAt);
+        }
+        } catch (Exception e) {
+            log.error("🔴 EXCEPTION in onUpdateReceived: {}", e.getMessage());
+            log.error("Stack trace:", e);
         }
     }
 
