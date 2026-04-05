@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import static com.example.bot.QueueItem.Type;
+
 @Component
 public class MyTelegramBot extends TelegramLongPollingBot {
 
@@ -39,12 +41,14 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     private final ConfigService config;
     private final MessageService messageService;
     private final ImageService imageService;
+    private final QueueService queueService;
     private final Random random = new Random();
 
-    public MyTelegramBot(ConfigService config, MessageService messageService, ImageService imageService) {
+    public MyTelegramBot(ConfigService config, MessageService messageService, ImageService imageService, QueueService queueService) {
         this.config = config;
         this.messageService = messageService;
         this.imageService = imageService;
+        this.queueService = queueService;
     }
 
     @PostConstruct
@@ -112,10 +116,13 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         String fileId = photo.getFileId();
 
         // Сохраняем ссылку на фото
-        imageService.saveImage(msg, fileId, ".jpg");
+        String fileName = imageService.saveImage(msg, fileId, ".jpg");
 
-        int count = imageService.getImageCount();
-        sendMessage(chatIdStr, "Фото сохранено! Всего картинок: " + count);
+        // Добавляем в очередь
+        queueService.addImage(fileName);
+
+        int queueSize = queueService.getQueueSize();
+        sendMessage(chatIdStr, "Фото добавлено в очередь! В очереди: " + queueSize);
     }
 
     private void handleRecipient(String chatId, String userName, String text, String adminId) {
@@ -179,7 +186,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         "/now - отправить сейчас\n" +
                         "/images - список картинок\n" +
                         "/sendimage N - отправить картинку #N\n" +
-                        "/sendimageall - отправить все картинки\n" +
+                        "/sendimageall - все картинки\n" +
                         "/logs");
                     break;
 
@@ -361,18 +368,36 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             sendMessage(chatId, "Нет получателей! Добавьте: /addrecipient ID или @nick");
             return;
         }
-        List<String> msgs = messageService.loadMessages();
-        if (msgs.isEmpty()) {
-            sendMessage(chatId, "Список пуст!");
-            return;
+
+        // Пытаемся взять из очереди
+        QueueItem item = queueService.popRandom();
+        if (item == null) {
+            // Если очередь пуста, пробуем старый способ
+            List<String> msgs = messageService.loadMessages();
+            if (msgs.isEmpty()) {
+                sendMessage(chatId, "Очередь пуста! Добавьте /add текст или отправьте картинку");
+                return;
+            }
+            String msg = msgs.get(random.nextInt(msgs.size()));
+            for (String r : recs) {
+                sendMessage(r, msg);
+            }
+            msgs.remove(msg);
+            messageService.saveMessages(msgs);
+            sendMessage(chatId, "Отправлено: " + msg);
+        } else {
+            // Отправляем из очереди
+            for (String r : recs) {
+                if (item.type == QueueItem.Type.TEXT) {
+                    sendMessage(r, item.content);
+                } else if (item.type == QueueItem.Type.IMAGE) {
+                    InputFile img = queueService.getImageInputFile(item.content);
+                    if (img != null) sendPhoto(r, img);
+                }
+            }
+            sendMessage(chatId, "Отправлено из очереди: " + item.type + " - " +
+                (item.type == QueueItem.Type.TEXT ? item.content.substring(0, Math.min(30, item.content.length())) : item.content));
         }
-        String msg = msgs.get(random.nextInt(msgs.size()));
-        for (String r : recs) {
-            sendMessage(r, msg);
-        }
-        msgs.remove(msg);
-        messageService.saveMessages(msgs);
-        sendMessage(chatId, "Отправлено: " + msg);
     }
 
     private void sendLogs(String chatId) {
@@ -398,16 +423,34 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             curMinute, targetTime, lastSent, recs.size());
 
         if (curTime.equals(targetTime) && !curMinute.equals(lastSent) && !recs.isEmpty()) {
-            List<String> msgs = messageService.loadMessages();
-            if (!msgs.isEmpty()) {
-                String msg = msgs.get(random.nextInt(msgs.size()));
-                for (String r : recs) {
-                    sendMessage(r, msg);
+            // Пытаемся взять из очереди
+            QueueItem item = queueService.popRandom();
+
+            if (item == null) {
+                // Если очередь пуста, пробуем старый способ
+                List<String> msgs = messageService.loadMessages();
+                if (!msgs.isEmpty()) {
+                    String msg = msgs.get(random.nextInt(msgs.size()));
+                    for (String r : recs) {
+                        sendMessage(r, msg);
+                    }
+                    msgs.remove(msg);
+                    messageService.saveMessages(msgs);
+                    setLastSent(curMinute);
+                    log.info("[АВТООТПРАВКА] текст: {}", msg);
                 }
-                msgs.remove(msg);
-                messageService.saveMessages(msgs);
+            } else {
+                // Отправляем из очереди (текст или картинку)
+                for (String r : recs) {
+                    if (item.type == QueueItem.Type.TEXT) {
+                        sendMessage(r, item.content);
+                    } else if (item.type == QueueItem.Type.IMAGE) {
+                        InputFile img = queueService.getImageInputFile(item.content);
+                        if (img != null) sendPhoto(r, img);
+                    }
+                }
                 setLastSent(curMinute);
-                log.info("[АВТООТПРАВКА] {}", msg);
+                log.info("[АВТООТПРАВКА] {}: {}", item.type, item.content);
             }
         }
     }
