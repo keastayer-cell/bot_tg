@@ -19,7 +19,7 @@ public class BotApplication {
     }
 
     @Bean
-    public CommandLineRunner initConfig(ConfigService config) {
+    public CommandLineRunner initConfig(ConfigService config, ImageMigrationService imageMigration) {
         return args -> {
             try {
                 config.init();
@@ -29,6 +29,14 @@ public class BotApplication {
                 log.info("✓ Конфиг инициализирован, admin-id = {}", config.getAdminId());
             } catch (Exception e) {
                 log.error("✗ Ошибка инициализации конфига", e);
+            }
+            
+            // Запускаем автоматическую миграцию старых образов
+            try {
+                log.info("Starting automatic image migration...");
+                imageMigration.migrateImageFiles();
+            } catch (Exception e) {
+                log.error("✗ Ошибка при миграции образов: {}", e.getMessage());
             }
         };
     }
