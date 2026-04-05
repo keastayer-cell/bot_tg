@@ -48,14 +48,16 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     private final ImageService imageService;
     private final QueueService queueService;
     private final DiagramService diagramService;
+    private final SubscriberMonitorService subscriberMonitor;
     private final Random random = new Random();
 
-    public MyTelegramBot(ConfigService config, MessageService messageService, ImageService imageService, QueueService queueService, DiagramService diagramService) {
+    public MyTelegramBot(ConfigService config, MessageService messageService, ImageService imageService, QueueService queueService, DiagramService diagramService, SubscriberMonitorService subscriberMonitor) {
         this.config = config;
         this.messageService = messageService;
         this.imageService = imageService;
         this.queueService = queueService;
         this.diagramService = diagramService;
+        this.subscriberMonitor = subscriberMonitor;
     }
 
     @PostConstruct
@@ -112,6 +114,20 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             String adminId = getAdminId();
             boolean isAdmin = chatIdStr.equals(adminId);
             
+            // Мониторинг активности подписчиков
+            if (!isAdmin && getRecipients().contains(chatIdStr)) {
+                // Обработка действий пользователя (печатает, записывает и т.д.)
+                if (msg.hasChatAction()) {
+                    String action = msg.getChatAction();
+                    if (action != null) {
+                        String notification = subscriberMonitor.processUserAction(chatIdStr, userName, action);
+                        if (notification != null) {
+                            sendMessage(adminId, "📊 " + notification);
+                        }
+                    }
+                }
+            }
+            
             // DEBUG: логируем каждое обновление чтобы видеть что происходит
             if (msg.hasText()) {
                 log.warn("🔍 UPDATE: chatId={}, adminId={}, isAdmin={}, text={}", 
@@ -144,7 +160,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     "/sendimageall - всем\n\n" +
                     "📜 *Прочее:*\n" +
                     "/messages - тексты\n" +
-                    "/logs");
+                    "/logs\n" +
+                    "/diagram - диаграммы\n" +
+                    "/monitor - мониторинг подписчиков");
                 log.info("Админу {} отправлен список команд", chatIdStr);
             } else {
                 // Обычный пользователь - подписываем по chatId
@@ -285,6 +303,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 handleDiagram(chatId);
             } else if (text.startsWith("/diagram ")) {
                 handleDiagramGenerate(chatId, text);
+            } else if (text.equals("/monitor")) {
+                handleMonitor(chatId);
+            } else if (text.startsWith("/monitor ")) {
+                handleMonitorToggle(chatId, text);
             } else if (text.equals("📬 Админу")) {
                 sendMessage(chatId, "Вы админ! Используйте команды для рассылки.\n/add текст - добавить сообщение\n/now - отправить сейчас");
             } else if (text.startsWith("/settime ")) {
@@ -664,6 +686,53 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             log.error("Ошибка генерации диаграммы: {}", e.getMessage());
             sendMessage(chatId, "❌ Ошибка генерации диаграммы: " + e.getMessage() +
                 "\n\nПопробуйте другой текст или используйте /diagram для справки");
+        }
+    }
+
+    private void handleMonitor(String chatId) {
+        String status = subscriberMonitor.getMonitoringStats();
+        sendMessage(chatId, status);
+    }
+
+    private void handleMonitorToggle(String chatId, String text) {
+        String[] parts = text.split("\\s+", 2);
+        if (parts.length < 2) {
+            sendMessage(chatId, "❌ Укажите параметр: /monitor on или /monitor off\n\nТекущий статус: " +
+                (subscriberMonitor.isMonitoringEnabled() ? "ВКЛЮЧЕН" : "ОТКЛЮЧЕН"));
+            return;
+        }
+
+        String command = parts[1].toLowerCase().trim();
+        switch (command) {
+            case "on", "вкл", "enable", "start" -> {
+                subscriberMonitor.setMonitoringEnabled(true);
+                sendMessage(chatId, "✅ Мониторинг подписчиков ВКЛЮЧЕН\n\n" +
+                    "Теперь вы будете получать уведомления когда подписчики:\n" +
+                    "🟢 Становятся онлайн\n" +
+                    "✍️ Начинают печатать\n" +
+                    "🎤 Записывают голосовые\n" +
+                    "📷 Отправляют фото/видео\n\n" +
+                    "Используйте /monitor для просмотра статистики");
+            }
+            case "off", "выкл", "disable", "stop" -> {
+                subscriberMonitor.setMonitoringEnabled(false);
+                sendMessage(chatId, "❌ Мониторинг подписчиков ОТКЛЮЧЕН\n\n" +
+                    "Уведомления о активности подписчиков больше не приходят");
+            }
+            case "clear", "очистить" -> {
+                subscriberMonitor.clearHistory();
+                sendMessage(chatId, "🧹 История активности подписчиков очищена");
+            }
+            case "stats", "статус" -> {
+                handleMonitor(chatId);
+            }
+            default -> {
+                sendMessage(chatId, "❌ Неизвестная команда. Используйте:\n" +
+                    "/monitor on - включить\n" +
+                    "/monitor off - выключить\n" +
+                    "/monitor clear - очистить историю\n" +
+                    "/monitor stats - показать статистику");
+            }
         }
     }
 
