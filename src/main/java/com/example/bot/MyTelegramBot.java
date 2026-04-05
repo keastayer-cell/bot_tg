@@ -459,7 +459,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         }
 
         // Пытаемся взять из очереди
-        QueueItem item = queueService.popRandom();
+        QueueItem item = queueService.popFirst();
         if (item == null) {
             // Если очередь пуста, пробуем старый способ
             List<String> msgs = messageService.loadMessages();
@@ -510,7 +510,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         if (curTime.equals(targetTime) && !curMinute.equals(lastSent) && !getRecipients().isEmpty()) {
             // Пытаемся взять из очереди
-            QueueItem item = queueService.popRandom();
+            QueueItem item = queueService.popFirst();
 
             if (item == null) {
                 // Если очередь пуста, пробуем старый способ

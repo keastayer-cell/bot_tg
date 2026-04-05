@@ -83,6 +83,15 @@ public class QueueService {
         saveQueue(queue);
     }
 
+    public QueueItem popFirst() {
+        List<QueueItem> queue = loadQueue();
+        if (queue.isEmpty()) return null;
+        
+        QueueItem item = queue.remove(0);
+        saveQueue(queue);
+        return item;
+    }
+
     public QueueItem popRandom() {
         List<QueueItem> queue = loadQueue();
         if (queue.isEmpty()) return null;
