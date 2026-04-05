@@ -64,8 +64,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private String getAdminId() {
         String fromConfig = config.get("admin-id", "");
-        if (fromConfig != null && !fromConfig.isEmpty()) return fromConfig;
-        return adminChatId != null ? adminChatId : "";
+        String result = (fromConfig != null && !fromConfig.isEmpty()) ? fromConfig : (adminChatId != null ? adminChatId : "");
+        log.debug("getAdminId() -> fromConfig='{}', adminChatId='{}', result='{}'", fromConfig, adminChatId, result);
+        return result;
     }
     private String getTime() { return config.get("time", "09:00"); }
     private void setTime(String val) { config.set("time", val); }

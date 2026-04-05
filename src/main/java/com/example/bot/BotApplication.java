@@ -21,11 +21,15 @@ public class BotApplication {
     @Bean
     public CommandLineRunner initConfig(ConfigService config) {
         return args -> {
-            config.init();
-            // Устанавливаем часовой пояс
-            String timezone = config.getTimezone();
-            System.setProperty("user.timezone", timezone);
-            log.info("Установлен часовой пояс: {}", timezone);
+            try {
+                config.init();
+                String timezone = config.getTimezone();
+                System.setProperty("user.timezone", timezone);
+                log.info("✓ Часовой пояс установлен: {}", timezone);
+                log.info("✓ Конфиг инициализирован, admin-id = {}", config.getAdminId());
+            } catch (Exception e) {
+                log.error("✗ Ошибка инициализации конфига", e);
+            }
         };
     }
 }
