@@ -37,11 +37,7 @@ public class ConfigService {
     }
 
     public void save() {
-        try (OutputStream out = new FileOutputStream(configFile)) {
-            props.store(out, "Bot Config");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        saveProperties();
     }
 
     public String get(String key, String defaultValue) {
@@ -50,7 +46,18 @@ public class ConfigService {
 
     public void set(String key, String value) {
         props.setProperty(key, value);
-        save();
+        saveProperties();
+    }
+
+    private void saveProperties() {
+        try (PrintWriter w = new PrintWriter(new FileWriter(configFile))) {
+            w.println("#Bot Config");
+            for (String k : props.stringPropertyNames()) {
+                w.println(k + "=" + props.getProperty(k));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     // Работа с получателями
@@ -79,6 +86,23 @@ public class ConfigService {
         List<String> list = getRecipients();
         list.remove(id);
         saveRecipients(list);
+    }
+
+    public void replaceRecipient(String oldValue, String newValue) {
+        List<String> list = getRecipients();
+        boolean changed = false;
+
+        if (list.remove(oldValue)) {
+            changed = true;
+        }
+        if (!list.contains(newValue)) {
+            list.add(newValue);
+            changed = true;
+        }
+
+        if (changed) {
+            saveRecipients(list);
+        }
     }
 
     private void saveRecipients(List<String> list) {

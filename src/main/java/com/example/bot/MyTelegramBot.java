@@ -6,11 +6,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -18,6 +18,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import javax.annotation.PostConstruct;
 import java.io.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -37,11 +38,13 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private final ConfigService config;
     private final MessageService messageService;
+    private final ImageService imageService;
     private final Random random = new Random();
 
-    public MyTelegramBot(ConfigService config, MessageService messageService) {
+    public MyTelegramBot(ConfigService config, MessageService messageService, ImageService imageService) {
         this.config = config;
         this.messageService = messageService;
+        this.imageService = imageService;
     }
 
     @PostConstruct
@@ -51,22 +54,17 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private String getAdminId() { return config.get("admin-id", ""); }
     private String getTime() { return config.get("time", "09:00"); }
-    private String getLastSent() { return config.get("last_sent", ""); }
     private void setTime(String val) { config.set("time", val); }
     private void setLastSent(String val) { config.set("last_sent", val); }
+    private String getLastSent() { return config.get("last_sent", ""); }
     private List<String> getRecipients() { return config.getRecipients(); }
 
     @Override
     public void onUpdateReceived(Update update) {
-        if (!update.hasMessage() || !update.getMessage().hasText()) return;
-
         Message msg = update.getMessage();
+        if (msg == null) return;
+
         Long chatId = msg.getChatId();
-        String text = msg.getText();
-        String user = msg.getFrom().getUserName();
-
-        log.info("[{}] {}", user != null ? "@" + user : chatId, text);
-
         String chatIdStr = String.valueOf(chatId);
         String userName = msg.getFrom().getUserName();
         String userNameWithAt = userName != null ? "@" + userName : null;
@@ -77,32 +75,77 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                               (userNameWithAt != null && getRecipients().contains(userNameWithAt));
 
         if (!isAdmin && !isRecipient) {
-            log.warn("Неизвестный пользователь: {}", chatId);
+            if (msg.hasText()) {
+                log.warn("Неизвестный пользователь: {}", chatId);
+                sendMessageWithKeyboard(chatIdStr, "Извините, вы не участник бота.\nСвяжитесь с администратором.");
+            }
             return;
         }
 
+        // Обработка картинок от админа
+        if (isAdmin && msg.hasPhoto()) {
+            handleAdminPhoto(msg);
+            return;
+        }
+
+        if (!msg.hasText()) return;
+
+        String text = msg.getText();
+        log.info("[{}] {}", userName != null ? "@" + userName : chatId, text);
+
         if (isRecipient && !isAdmin) {
-            handleRecipient(chatIdStr, text, adminId);
+            handleRecipient(chatIdStr, userNameWithAt, text, adminId);
         } else if (isAdmin) {
             handleAdmin(chatIdStr, text);
         }
     }
 
-    private void handleRecipient(String chatId, String text, String adminId) {
-        if (text.equals("/start")) {
-            sendMessageWithKeyboard(chatId, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬", adminId);
+    private void handleAdminPhoto(Message msg) {
+        String chatIdStr = String.valueOf(msg.getChatId());
+        List<PhotoSize> photos = msg.getPhoto();
+        if (photos == null || photos.isEmpty()) {
+            sendMessage(chatIdStr, "Не удалось получить фото");
+            return;
+        }
+
+        PhotoSize photo = photos.get(photos.size() - 1); // Самое большое фото
+        String fileId = photo.getFileId();
+
+        // Сохраняем ссылку на фото
+        imageService.saveImage(msg, fileId, ".jpg");
+
+        int count = imageService.getImageCount();
+        sendMessage(chatIdStr, "Фото сохранено! Всего картинок: " + count);
+    }
+
+    private void handleRecipient(String chatId, String userName, String text, String adminId) {
+        if (text.equals("/start") || text.equals("🚀 Старт")) {
+            if (userName != null) {
+                config.replaceRecipient(userName, chatId);
+            }
+            log.info("[ПОЛУЧАТЕЛЬ] {} выполнил старт. chatId={}", userName != null ? userName : chatId, chatId);
+            sendMessageWithKeyboard(chatId, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
+        } else if (text.equals("📬 Написать админу") || text.equals("📬 Админу")) {
+            log.info("[ПОЛУЧАТЕЛЬ->АДМИН] {} начал ввод сообщения админу", userName != null ? userName : chatId);
+            sendMessage(chatId, "Введите сообщение для админа:", "recipient-prompt-admin");
         } else {
-            sendMessage(adminId, "📬 От " + chatId + ":\n" + text);
-            sendMessage(chatId, "Отправлено админу!");
+            String from = userName != null ? userName : chatId;
+            log.info("[ПОЛУЧАТЕЛЬ->АДМИН] от {}: {}", from, text);
+            sendMessage(adminId, "📬 От " + from + ":\n" + text, "forward-to-admin");
+            sendMessage(chatId, "Отправлено админу!", "recipient-confirm-forward");
         }
     }
 
-    private void sendMessageWithKeyboard(String chatId, String text, String adminId) {
-        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+    private void sendMessageWithKeyboard(String chatId, String text) {
+        ReplyKeyboardMarkup keyboard = new ReplyKeyboardMarkup();
+        keyboard.setResizeKeyboard(true);
+        keyboard.setOneTimeKeyboard(false);
 
-        List<InlineKeyboardButton> row = new ArrayList<>();
-        row.add(InlineKeyboardButton.builder().text("📬 Написать админу").callbackData("write_admin").build());
+        List<KeyboardRow> rows = new ArrayList<>();
+
+        KeyboardRow row = new KeyboardRow();
+        row.add(KeyboardButton.builder().text("🚀 Старт").build());
+        row.add(KeyboardButton.builder().text("📬 Админу").build());
         rows.add(row);
 
         keyboard.setKeyboard(rows);
@@ -114,8 +157,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 .replyMarkup(keyboard)
                 .parseMode("Markdown")
                 .build());
+            log.info("[ОТПРАВКА][OK][keyboard] chatId={} text={}", chatId, shorten(text));
         } catch (TelegramApiException e) {
-            log.error("Ошибка отправки: {}", e.getMessage());
+            log.error("[ОТПРАВКА][ERROR][keyboard] chatId={} text={} error={}", chatId, shorten(text), e.getMessage());
         }
     }
 
@@ -123,7 +167,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         try {
             switch (text) {
                 case "/start":
-                    sendMessage(chatId, "Привет, админ!\n\nКоманды:\n" +
+                    sendMessageWithKeyboard(chatId, "Привет, админ!\n\nКоманды:\n" +
                         "/recipients - список получателей\n" +
                         "/addrecipient ID - добавить по ID\n" +
                         "/addrecipient @nick - добавить по нику\n" +
@@ -133,24 +177,27 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         "/messages - список сообщений\n" +
                         "/add текст\n" +
                         "/now - отправить сейчас\n" +
+                        "/images - список картинок\n" +
+                        "/sendimage N - отправить картинку #N\n" +
+                        "/sendimageall - отправить все картинки\n" +
                         "/logs");
                     break;
 
                 case "/recipients":
                     List<String> recs = getRecipients();
                     if (recs.isEmpty()) {
-                        sendMessage(chatId, "Нет получателей!\n/addrecipient ID или @nick");
+                        sendMessage(chatId, "Нет получателей!\n/addrecipient ID или @nick", "admin-recipients-empty");
                     } else {
                         StringBuilder sb = new StringBuilder("Получатели:\n");
                         for (int i = 0; i < recs.size(); i++) {
                             sb.append(i + 1).append(". ").append(recs.get(i)).append("\n");
                         }
-                        sendMessage(chatId, sb.toString());
+                        sendMessage(chatId, sb.toString(), "admin-recipients-list");
                     }
                     break;
 
                 case "/time":
-                    sendMessage(chatId, "Время отправки: " + getTime());
+                    sendMessage(chatId, "Время отправки: " + getTime(), "admin-time");
                     break;
 
                 case "/messages":
@@ -171,9 +218,84 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     sendLogs(chatId);
                     break;
 
+                case "/images":
+                    List<String> images = imageService.getImageNames();
+                    if (images.isEmpty()) {
+                        sendMessage(chatId, "Нет сохранённых картинок.\nОтправьте фото боту, чтобы сохранить.");
+                    } else {
+                        int count = images.size();
+                        sendMessage(chatId, "Сохранённые картинки (" + count + "):\n" +
+                            "Чтобы отправить: /sendimage 1\n(или /sendimageall для всем)");
+                    }
+                    break;
+
+                case "/sendimageall":
+                    List<String> imgs = imageService.getImageNames();
+                    List<String> recs = getRecipients();
+                    if (imgs.isEmpty()) {
+                        sendMessage(chatId, "Нет картинок для отправки");
+                    } else if (recs.isEmpty()) {
+                        sendMessage(chatId, "Нет получателей");
+                    } else {
+                        for (String imgName : imgs) {
+                            InputFile img = imageService.getImageInputFile(imgName);
+                            if (img != null) {
+                                for (String r : recs) {
+                                    sendPhoto(r, img);
+                                }
+                            }
+                        }
+                        sendMessage(chatId, "Отправлено " + imgs.size() + " картинок всем получателям");
+                    }
+                    break;
+
                 default:
-                    if (text.startsWith("/settime ")) {
-                        setTime(text.substring(9));
+                    if (text.startsWith("/sendimage ")) {
+                        int idx;
+                        try {
+                            idx = Integer.parseInt(text.substring(11)) - 1;
+                        } catch (NumberFormatException e) {
+                            sendMessage(chatId, "Используйте: /sendimage 1");
+                            return;
+                        }
+                        List<String> allImages = imageService.getImageNames();
+                        if (idx < 0 || idx >= allImages.size()) {
+                            sendMessage(chatId, "Нет такой картинки. Всего: " + allImages.size());
+                            return;
+                        }
+                        String imgName = allImages.get(idx);
+                        InputFile img = imageService.getImageInputFile(imgName);
+                        List<String> recipients = getRecipients();
+                        if (recipients.isEmpty()) {
+                            sendMessage(chatId, "Нет получателей");
+                            return;
+                        }
+                        for (String r : recipients) {
+                            sendPhoto(r, img);
+                        }
+                        sendMessage(chatId, "Отправлено: " + imgName);
+                    } else if (text.equals("🚀 Старт")) {
+                        // Показываем команды
+                        sendMessageWithKeyboard(chatId, "Команды админа:\n" +
+                            "/recipients - список получателей\n" +
+                            "/addrecipient ID - добавить по ID\n" +
+                            "/addrecipient @nick - добавить по нику\n" +
+                            "/delrecipient ID - удалить\n" +
+                            "/time - время отправки\n" +
+                            "/settime 14:00\n" +
+                            "/messages - список сообщений\n" +
+                            "/add текст\n" +
+                            "/now - отправить сейчас\n" +
+                            "/images - список картинок\n" +
+                            "/sendimage N - отправить картинку #N\n" +
+                            "/sendimageall - все картинки\n" +
+                            "/logs");
+                    } else if (text.equals("📬 Админу")) {
+                        sendMessage(chatId, "Вы админ! Используйте команды для рассылки.\n/add текст - добавить сообщение\n/now - отправить сейчас");
+                        break;
+                    } else if (text.startsWith("/settime ")) {
+                        String newTime = text.substring(9).replace("-", ":");
+                        setTime(newTime);
                         sendMessage(chatId, "Время: " + getTime());
                     } else if (text.startsWith("/add ")) {
                         messageService.addMessage(text.substring(5));
@@ -204,11 +326,33 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     }
 
     private void sendMessage(String chatId, String text) {
+        sendMessage(chatId, text, "default");
+    }
+
+    private void sendMessage(String chatId, String text, String context) {
         try {
             execute(SendMessage.builder().chatId(chatId).text(text).build());
+            log.info("[ОТПРАВКА][OK][{}] chatId={} text={}", context, chatId, shorten(text));
         } catch (TelegramApiException e) {
-            log.error("Ошибка отправки: {}", e.getMessage());
+            log.error("[ОТПРАВКА][ERROR][{}] chatId={} text={} error={}", context, chatId, shorten(text), e.getMessage());
         }
+    }
+
+    private void sendPhoto(String chatId, InputFile photo) {
+        try {
+            execute(SendPhoto.builder().chatId(chatId).photo(photo).build());
+            log.info("[ОТПРАВКА][OK][photo] chatId={}", chatId);
+        } catch (TelegramApiException e) {
+            log.error("[ОТПРАВКА][ERROR][photo] chatId={} error={}", chatId, e.getMessage());
+        }
+    }
+
+    private String shorten(String text) {
+        if (text == null) {
+            return "";
+        }
+        String normalized = text.replace("\n", "\\n");
+        return normalized.length() > 120 ? normalized.substring(0, 120) + "..." : normalized;
     }
 
     private void sendNow(String chatId) {
@@ -243,14 +387,17 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     }
 
     public void checkAndSend() {
-        LocalTime now = LocalTime.now().plusHours(3);
+        LocalDateTime now = LocalDateTime.now();
         String curTime = now.format(DateTimeFormatter.ofPattern("HH:mm"));
-        String curDate = LocalDate.now().toString();
+        String curMinute = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         String targetTime = getTime();
         String lastSent = getLastSent();
         List<String> recs = getRecipients();
 
-        if (curTime.equals(targetTime) && !curDate.equals(lastSent) && !recs.isEmpty()) {
+        log.info("[ПЛАНИРОВЩИК] Текущее: {}, Цель: {}, Последняя отправка: {}, Получателей: {}",
+            curMinute, targetTime, lastSent, recs.size());
+
+        if (curTime.equals(targetTime) && !curMinute.equals(lastSent) && !recs.isEmpty()) {
             List<String> msgs = messageService.loadMessages();
             if (!msgs.isEmpty()) {
                 String msg = msgs.get(random.nextInt(msgs.size()));
@@ -259,7 +406,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 }
                 msgs.remove(msg);
                 messageService.saveMessages(msgs);
-                setLastSent(curDate);
+                setLastSent(curMinute);
                 log.info("[АВТООТПРАВКА] {}", msg);
             }
         }
