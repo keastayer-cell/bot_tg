@@ -34,30 +34,45 @@ java -jar target/telegram-bot-1.0.0.jar
 
 | Параметр | Описание | Пример |
 |----------|----------|--------|
-| `TELEGRAM_TOKEN` | Токен бота | `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11` |
-| `TELEGRAM_BOT_NAME` | Имя бота | `MyBot` |
-| `RECIPIENT_CHAT_ID` | Chat ID получателя | `123456789` |
+| `BOT_TOKEN` | Токен бота | `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11` |
+| `BOT_USERNAME` | Имя бота | `MyBot` |
 | `ADMIN_CHAT_ID` | Chat ID администратора | `123456789` |
+| `TIMEZONE` | Часовой пояс | `Europe/Moscow` |
+| `SCHEDULER_INTERVAL` | Интервал планировщика (мс) | `60000` |
 | `PORT` | Порт (по умолчанию 8080) | `8080` |
 
-Или через application.properties:
+Или через config.properties:
 
 ```properties
-bot.token=ВАШ_ТОКЕН
-bot.username=ИМЯ_БОТА
-bot.recipient=CHAT_ID
-bot.admin-id=CHAT_ID
-bot.time=09:00
+time=09:00
+timezone=Europe/Moscow
+admin-id=123456789
+last_sent=
 ```
 
 ## Команды бота
 
-- `/start` - Запуск
+### Админ команды:
+- `/start` - Показать меню команд
+- `/recipients` - Список получателей
+- `/addrecipient <ID>` - Добавить получателя
+- `/delrecipient <ID>` - Удалить получателя
 - `/time` - Показать время отправки
-- `/settime <время>` - Установить время
-- `/messages` - Показать список сообщений
-- `/add <текст>` - Добавить сообщение
-- `/recipient` - Показать получателя
-- `/msg <текст>` - Отправить сообщение получателю
-- `/now` - Отправить сообщение сейчас
+- `/settime <HH:MM>` - Установить время отправки
+- `/settimezone <timezone>` - Установить часовой пояс (например, Europe/Moscow)
+- `/now` - Отправить сейчас
+- `/messages` - Список текстов
+- `/add <текст>` - Добавить текст в очередь
+- `/queue` - Показать очередь
+- `/fillqueue` - Заполнить очередь из текстов и картинок
+- `/images` - Список картинок
+- `/sendimage <N>` - Отправить N-ю картинку
+- `/sendimageall` - Отправить все картинки
+- `/stats` - Статистика
 - `/logs` - Показать логи
+- `/msg <текст>` - Отправить текст всем
+
+### Пользовательские команды:
+- `/start` - Подписаться на рассылку
+- Кнопка "🚀 Старт" - то же
+- Кнопка "📬 Админу" - написать админу
