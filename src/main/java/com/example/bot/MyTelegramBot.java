@@ -16,7 +16,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.Keyboard
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.io.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -332,6 +332,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         break;
                     } else if (text.startsWith("/settime ")) {
                         String newTime = text.substring(9).replace("-", ":");
+                        if (!newTime.matches("^\\d{1,2}:\\d{2}$")) {
+                            sendMessage(chatId, "Неверный формат времени. Используйте HH:MM, например /settime 14:00");
+                            return;
+                        }
                         setTime(newTime);
                         sendMessage(chatId, "Время: " + getTime());
                     } else if (text.startsWith("/add ")) {
@@ -371,7 +375,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         try {
             execute(SendMessage.builder().chatId(chatId).text(text).build());
         } catch (TelegramApiException e) {
-            log.error("Ошибка отправки {}: {}", chatId, e.getMessage());
+            log.error("Ошибка отправки сообщения {} в {}: {}", context, chatId, e.getMessage());
         }
     }
 
@@ -379,7 +383,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         try {
             execute(SendPhoto.builder().chatId(chatId).photo(photo).build());
         } catch (TelegramApiException e) {
-            log.error("Ошибка отправки фото {}: {}", chatId, e.getMessage());
+            log.error("Ошибка отправки фото в {}: {}", chatId, e.getMessage());
         }
     }
 

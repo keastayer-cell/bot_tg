@@ -49,7 +49,7 @@ public class ConfigService {
         saveProperties();
     }
 
-    private void saveProperties() {
+    private synchronized void saveProperties() {
         try (PrintWriter w = new PrintWriter(new FileWriter(configFile))) {
             w.println("#Bot Config");
             for (String k : props.stringPropertyNames()) {
@@ -105,7 +105,7 @@ public class ConfigService {
         }
     }
 
-    private void saveRecipients(List<String> list) {
+    private synchronized void saveRecipients(List<String> list) {
         try (PrintWriter w = new PrintWriter(new FileWriter(recipientsFile))) {
             for (String s : list) w.println(s);
         } catch (IOException e) {
