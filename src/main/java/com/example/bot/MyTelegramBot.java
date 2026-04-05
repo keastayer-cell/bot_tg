@@ -148,7 +148,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             handleRecipient(chatIdStr, userNameWithAt, text, adminId);
         } else if (isAdmin) {
             log.info("АДМИН {} отправил команду: {}", chatIdStr, text);
-            handleAdmin(chatIdStr, text);
+            handleAdmin(chatIdStr, text, isAdmin, userNameWithAt);
         }
     }
 
@@ -212,9 +212,11 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleAdmin(String chatId, String text) {
+    private void handleAdmin(String chatId, String text, boolean isAdmin, String userNameWithAt) {
         try {
-            if (text.equals("/recipients")) {
+            if (text.equals("/admin")) {
+                sendMessage(chatId, isAdmin ? "Вы админ" : "Вы не админ");
+            } else if (text.equals("/recipients")) {
                 handleRecipients(chatId);
             } else if (text.equals("/time")) {
                 handleTime(chatId);
@@ -245,9 +247,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             } else if (text.startsWith("/addrecipient ")) {
                 handleAddRecipient(chatId, text);
             } else if (text.equals("/chatid")) {
-                handleChatId(chatIdStr, userNameWithAt);
+                handleChatId(chatId, userNameWithAt);
             } else if (text.startsWith("/settimezone ")) {
-                handleMsg(chatId, text);
+                handleSetTimezone(chatId, text);
             }
         } catch (Exception e) {
             log.error("Ошибка обработки команды админа: {}", e.getMessage());
@@ -372,39 +374,49 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     }
 
     private void handleSetTime(String chatId, String text) {
-        String newTime = text.substring(9).replace("-", ":");
-        if (!newTime.matches("^\\d{1,2}:\\d{2}$")) {
+        String[] parts = text.split("\\s+", 2);
+        String arg = parts.length > 1 ? parts[1] : "";
+        arg = arg.replaceAll("@\\w+", "").trim();
+        if (!arg.matches("^\\d{1,2}:\\d{2}$")) {
             sendMessage(chatId, "Неверный формат времени. Используйте HH:MM, например /settime 14:00");
             return;
         }
-        setTime(newTime);
+        setTime(arg);
         sendMessage(chatId, "Время: " + getTime());
     }
 
     private void handleAddText(String chatId, String text) {
-        String txt = text.substring(5);
-        if (txt.trim().isEmpty()) {
+        String[] parts = text.split("\\s+", 2);
+        String arg = parts.length > 1 ? parts[1] : "";
+        arg = arg.replaceAll("@\\w+", "").trim();
+        if (arg.isEmpty()) {
             sendMessage(chatId, "Текст не может быть пустым");
             return;
         }
-        queueService.addText(txt);
+        queueService.addText(arg);
         sendMessage(chatId, "Добавлено в очередь! Всего: " + queueService.getQueueSize());
     }
 
     private void handleAddRecipient(String chatId, String text) {
-        String recipient = text.substring(14).trim();
-        if (!recipient.matches("^\\d+$")) {
+        log.info("Обработка /addrecipient: {}", text);
+        String[] parts = text.split("\\s+", 2);
+        String arg = parts.length > 1 ? parts[1] : "";
+        arg = arg.replaceAll("@\\w+", "").trim(); // убрать @botname
+        log.info("Аргумент после обработки: '{}'", arg);
+        if (!arg.matches("^\\d+$")) {
             sendMessage(chatId, "Введите chat ID: /addrecipient 123456789");
             return;
         }
-        config.addRecipient(recipient);
-        sendMessage(chatId, "Получатель добавлен: " + recipient);
+        config.addRecipient(arg);
+        sendMessage(chatId, "Получатель добавлен: " + arg);
     }
 
     private void handleDelRecipient(String chatId, String text) {
-        String recipient = text.substring(14).trim();
-        config.removeRecipient(recipient);
-        sendMessage(chatId, "Получатель удалён: " + recipient);
+        String[] parts = text.split("\\s+", 2);
+        String arg = parts.length > 1 ? parts[1] : "";
+        arg = arg.replaceAll("@\\w+", "").trim();
+        config.removeRecipient(arg);
+        sendMessage(chatId, "Получатель удалён: " + arg);
     }
 
     private void handleChatId(String chatId, String userName) {
@@ -412,17 +424,15 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     }
 
     private void handleSetTimezone(String chatId, String text) {
-
-    private void handleMsg(String chatId, String text) {
-        String msgText = text.substring(5);
-        if (msgText.trim().isEmpty()) {
-            sendMessage(chatId, "Сообщение не может быть пустым");
+        String[] parts = text.split("\\s+", 2);
+        String arg = parts.length > 1 ? parts[1] : "";
+        arg = arg.replaceAll("@\\w+", "").trim();
+        if (arg.isEmpty()) {
+            sendMessage(chatId, "Укажите часовой пояс, например /settimezone Europe/Moscow");
             return;
         }
-        for (String r : getRecipients()) {
-            sendMessage(r, msgText);
-        }
-        sendMessage(chatId, "Отправлено всем");
+        config.setTimezone(arg);
+        sendMessage(chatId, "Часовой пояс установлен: " + arg + ". Перезапустите бота для применения.");
     }
 
     private void sendPhoto(String chatId, InputFile photo) {
