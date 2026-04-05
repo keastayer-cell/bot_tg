@@ -39,6 +39,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     @Value("${bot.username}")
     private String username;
 
+    @Value("${admin-chat-id:}")
+    private String adminChatId;
+
     private final ConfigService config;
     private final MessageService messageService;
     private final ImageService imageService;
@@ -57,7 +60,11 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         log.info("Бот запущен");
     }
 
-    private String getAdminId() { return config.get("admin-id", ""); }
+    private String getAdminId() {
+        String fromConfig = config.get("admin-id", "");
+        if (fromConfig != null && !fromConfig.isEmpty()) return fromConfig;
+        return adminChatId != null ? adminChatId : "";
+    }
     private String getTime() { return config.get("time", "09:00"); }
     private void setTime(String val) { config.set("time", val); }
     private void setLastSent(String val) { config.set("last_sent", val); }
@@ -128,8 +135,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private void handleRecipient(String chatId, String userName, String text, String adminId) {
         if (text.equals("/start") || text.equals("🚀 Старт")) {
+            // Добавляем в получатели - по username или по chatId
             if (userName != null) {
                 config.replaceRecipient(userName, chatId);
+            } else {
+                // Добавляем по chatId если нет username
+                config.addRecipient(chatId);
             }
             sendMessageWithKeyboard(chatId, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
         } else if (text.equals("📬 Написать админу") || text.equals("📬 Админу")) {
