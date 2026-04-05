@@ -52,4 +52,29 @@ public class ImageService {
     public int getImageCount() {
         return getImageNames().size();
     }
+
+    /**
+     * Удаляет изображение из БД по fileId (после успешной отправки)
+     */
+    public void deleteImage(String fileId) {
+        try {
+            imageIndexRepository.deleteByFileId(fileId);
+            log.info("✓ Удалена картинка: {}", fileId);
+        } catch (Exception e) {
+            log.error("Ошибка удаления картинки: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Удаляет все изображения (очищает очередь)
+     */
+    public void deleteAllImages() {
+        try {
+            int count = imageIndexRepository.findAll().size();
+            imageIndexRepository.deleteAll();
+            log.info("✓ Очищена очередь картинок: удалено {}", count);
+        } catch (Exception e) {
+            log.error("Ошибка очистки картинок: {}", e.getMessage());
+        }
+    }
 }

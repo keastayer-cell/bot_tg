@@ -64,6 +64,12 @@ public class QueueService {
             QueueItemEntity item = itemOpt.get();
             queueItemRepository.delete(item);
             QueueItem.Type type = QueueItem.Type.valueOf(item.getType());
+            
+            // ✓ Если это картинка, удаляем её из imageIndexRepository тоже
+            if (type == QueueItem.Type.IMAGE) {
+                imageService.deleteImage(item.getFileId());
+            }
+            
             return new QueueItem(type, item.getFileId());
         }
         return null;

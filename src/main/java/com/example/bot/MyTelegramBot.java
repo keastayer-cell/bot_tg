@@ -360,15 +360,20 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         } else if (recipients.isEmpty()) {
             sendMessage(chatId, "Нет получателей");
         } else {
+            int sentCount = 0;
             for (String imgName : imgs) {
                 InputFile img = imageService.getImageInputFile(imgName);
                 if (img != null) {
                     for (String r : recipients) {
                         sendPhoto(r, img);
                     }
+                    // ✓ Удаляем фото из БД после успешной отправки всем
+                    imageService.deleteImage(imgName);
+                    sentCount++;
+                    log.info("✓ Картинка sent and REMOVED: {}", imgName);
                 }
             }
-            sendMessage(chatId, "Отправлено " + imgs.size() + " картинок всем получателям");
+            sendMessage(chatId, "✓ Отправлено " + sentCount + " картинок всем получателям (удалены из очереди)");
         }
     }
 
@@ -415,7 +420,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         for (String r : getRecipients()) {
             sendPhoto(r, img);
         }
-        sendMessage(chatId, "Отправлено: " + imgName);
+        // ✓ Удаляем картинку после отправки
+        imageService.deleteImage(imgName);
+        sendMessage(chatId, "✓ Отправлено: " + imgName + " (удалена из очереди)");
     }
 
     private void handleSetTime(String chatId, String text) {
