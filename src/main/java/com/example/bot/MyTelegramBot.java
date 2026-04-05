@@ -96,7 +96,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         if (!msg.hasText()) return;
 
         String text = msg.getText();
-        log.info("[{}] {}", userName != null ? "@" + userName : chatId, text);
+        // Логируем только важные действия
 
         if (isRecipient && !isAdmin) {
             handleRecipient(chatIdStr, userNameWithAt, text, adminId);
@@ -131,14 +131,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             if (userName != null) {
                 config.replaceRecipient(userName, chatId);
             }
-            log.info("[ПОЛУЧАТЕЛЬ] {} выполнил старт. chatId={}", userName != null ? userName : chatId, chatId);
             sendMessageWithKeyboard(chatId, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
         } else if (text.equals("📬 Написать админу") || text.equals("📬 Админу")) {
-            log.info("[ПОЛУЧАТЕЛЬ->АДМИН] {} начал ввод сообщения админу", userName != null ? userName : chatId);
             sendMessage(chatId, "Введите сообщение для админа:", "recipient-prompt-admin");
         } else {
             String from = userName != null ? userName : chatId;
-            log.info("[ПОЛУЧАТЕЛЬ->АДМИН] от {}: {}", from, text);
+            log.info("От {} админу: {}", from, text);
             sendMessage(adminId, "📬 От " + from + ":\n" + text, "forward-to-admin");
             sendMessage(chatId, "Отправлено админу!", "recipient-confirm-forward");
         }
@@ -165,9 +163,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 .replyMarkup(keyboard)
                 .parseMode("Markdown")
                 .build());
-            log.info("[ОТПРАВКА][OK][keyboard] chatId={} text={}", chatId, shorten(text));
+            // Клавиатура отправлена
         } catch (TelegramApiException e) {
-            log.error("[ОТПРАВКА][ERROR][keyboard] chatId={} text={} error={}", chatId, shorten(text), e.getMessage());
+            log.error("Ошибка отправки клавиатуры: {}", e.getMessage());
         }
     }
 
@@ -349,7 +347,6 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             }
         } catch (Exception e) {
             log.error("Ошибка: {}", e.getMessage());
-            sendMessage(chatId, "Ошибка: " + e.getMessage());
         }
     }
 
@@ -360,18 +357,16 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     private void sendMessage(String chatId, String text, String context) {
         try {
             execute(SendMessage.builder().chatId(chatId).text(text).build());
-            log.info("[ОТПРАВКА][OK][{}] chatId={} text={}", context, chatId, shorten(text));
         } catch (TelegramApiException e) {
-            log.error("[ОТПРАВКА][ERROR][{}] chatId={} text={} error={}", context, chatId, shorten(text), e.getMessage());
+            log.error("Ошибка отправки {}: {}", chatId, e.getMessage());
         }
     }
 
     private void sendPhoto(String chatId, InputFile photo) {
         try {
             execute(SendPhoto.builder().chatId(chatId).photo(photo).build());
-            log.info("[ОТПРАВКА][OK][photo] chatId={}", chatId);
         } catch (TelegramApiException e) {
-            log.error("[ОТПРАВКА][ERROR][photo] chatId={} error={}", chatId, e.getMessage());
+            log.error("Ошибка отправки фото {}: {}", chatId, e.getMessage());
         }
     }
 
@@ -440,9 +435,6 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         String lastSent = getLastSent();
         
 
-        log.info("[ПЛАНИРОВЩИК] Текущее: {}, Цель: {}, Последняя отправка: {}, Получателей: {}",
-            curMinute, targetTime, lastSent, getRecipients().size());
-
         if (curTime.equals(targetTime) && !curMinute.equals(lastSent) && !getRecipients().isEmpty()) {
             // Пытаемся взять из очереди
             QueueItem item = queueService.popRandom();
@@ -458,10 +450,11 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     msgs.remove(msg);
                     messageService.saveMessages(msgs);
                     setLastSent(curMinute);
-                    log.info("[АВТООТПРАВКА] текст: {}", msg);
+                    log.info("Автоотправка: {}", msg.substring(0, Math.min(50, msg.length())));
                 }
             } else {
                 // Отправляем из очереди (текст или картинку)
+                String itemDesc = item.type == QueueItem.Type.TEXT ? "текст" : "картинку";
                 for (String r : getRecipients()) {
                     if (item.type == QueueItem.Type.TEXT) {
                         sendMessage(r, item.content);
@@ -471,7 +464,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     }
                 }
                 setLastSent(curMinute);
-                log.info("[АВТООТПРАВКА] {}: {}", item.type, item.content);
+                log.info("Автоотправка: {}", itemDesc);
             }
         }
     }
