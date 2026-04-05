@@ -97,7 +97,133 @@
 
 # История релизов
 
+## Релиз 2.0 - PostgreSQL и JPA Persistence (текущая версия)
+
+**Дата:** 5 апреля 2026
+
+### Изменения:
+- ✅ **Миграция на PostgreSQL** — все данные теперь хранятся в PostgreSQL вместо файлов
+- ✅ **JPA/Hibernate** — добавлена поддержка ORM для управления entities
+- ✅ **Автоматический выбор БД** — `DATABASE_URL` → PostgreSQL, иначе H2
+- ✅ **Photo Persistence** — фото сохраняются через `ImageIndex` table
+- ✅ **Recipient Management** — получатели хранятся в `recipients` table
+- ✅ **Message Queue** — очередь сообщений и фото в `queue` table
+- ✅ **Recipients Fix** — исправлена ошибка с сохранением chat ID получателей
+
+### Новые сущности:
+- `Recipient` — получатели рассылки
+- `Message` — сохранённые текстовые сообщения
+- `ImageIndex` — индекс Telegram file_id для фото
+- `QueueItemEntity` — элементы очереди (TEXT или IMAGE)
+
+### Технический стек:
+- Spring Boot 3.2.0 with Spring Data JPA
+- PostgreSQL (Railway) или H2 (fallback)
+- Java 21
+- TelegramBots 6.8.0
+
+---
+
 ## Релиз 1.0 - Первая версия
+
+**Дата:** апрель 2026
+
+### Функции:
+- ✅ Polling-бот (LongPolling) для получения обновлений
+- ✅ Автоматическая рассылка в заданное время
+- ✅ Управление очередью (FIFO)
+- ✅ Хранение файлов конфигурации и txt-файлов
+- ✅ Команды для админа и подписчиков
+- ✅ Обратная связь (подписчик → админ)
+
+### Хранение:
+- `config.properties` — параметры (время, timezone, админ ID)
+- `recipients.txt` — список получателей
+- `messages.txt` — сохранённые тексты
+- `images_index.txt` — индекс фото
+- `queue.txt` — очередь сообщений
+
+---
+
+# Архитектура сервиса
+
+## Компоненты
+
+```
+MyTelegramBot (основной класс)
+├── ConfigService (параметры, получатели)
+├── MessageService (работа с сообщениями)
+├── ImageService (хранение индекса фото)
+├── QueueService (управление очередью)
+├── MessageScheduler (планировщик отправки)
+├── MyTelegramBot (обработка обновлений)
+└── Controllers (REST endpoints)
+    ├── PingController (/ping)
+    ├── InfoController (/info)
+    └── WebhookController (/webhook)
+```
+
+## Поток данных
+
+```
+1. Админ отправляет фото или текст
+   ↓
+2. MyTelegramBot.onUpdateReceived() получает update
+   ↓
+3. handleAdminPhoto() или handleAdmin()
+   ↓
+4. ImageService.saveImage() / MessageService.addMessage()
+   ↓
+5. Данные сохраняются в БД (PostgreSQL/H2)
+   ↓
+6. QueueService добавляет элемент в очередь
+   ↓
+7. MessageScheduler проверяет время
+   ↓
+8. В нужное время QueueService.popFirst()
+   ↓
+9. MyTelegramBot отправляет элемент всем recipients
+```
+
+## База данных
+
+### Таблица `recipients`
+```sql
+CREATE TABLE recipients (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    recipient_id VARCHAR(255) UNIQUE NOT NULL
+);
+```
+
+### Таблица `messages`
+```sql
+CREATE TABLE messages (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    text VARCHAR(1000) NOT NULL
+);
+```
+
+### Таблица `image_index`
+```sql
+CREATE TABLE image_index (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    file_id VARCHAR(255) NOT NULL
+);
+```
+
+### Таблица `queue`
+```sql
+CREATE TABLE queue (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    recipient VARCHAR(255),
+    file_id VARCHAR(1000) NOT NULL,
+    type VARCHAR(50) NOT NULL
+);
+```
+
+---
+
+# История релизов
 
 ### Дата: 03.04.2025
 
@@ -157,5 +283,115 @@
    - `/sendimage 1` — отправить картинку №1 всем подписчикам
    - `/sendimageall` — отправить ВСЕ картинки всем
 3. **Отправить сейчас:** `/now` отправляет случайный элемент из очереди (текст или картинку)
+
+---
+
+# Развёртывание на Railway
+
+## Требования
+
+- Git репозиторий (GitHub)
+- Railway аккаунт
+- Telegram бот токен (от BotFather)
+
+## Пошагово
+
+1. **Спроектируй PostgreSQL плагин:**
+   - В Railway: `Add Plugin` → `PostgreSQL`
+   - Скопируй `DATABASE_URL` (формат: `postgresql://user:pass@host:port/dbname`)
+
+2. **Установи переменные окружения:**
+   ```
+   BOT_TOKEN=123456:ABC-DEF...
+   BOT_USERNAME=mybot
+   ADMIN_CHAT_ID=987654321
+   DATABASE_URL=postgresql://...
+   ```
+
+3. **Поддерживаемые переменные:**
+   - `BOT_TOKEN` — обязателен
+   - `BOT_USERNAME` — обязателен
+   - `ADMIN_CHAT_ID` — обязателен
+   - `DATABASE_URL` — опционален (если не задан, используется H2)
+   - `PORT` — по умолчанию 8080
+
+4. **Деплой:**
+   - Railway автоматически деплоит при пуше в `main`
+   - Проверь логи в Railway Dashboard
+
+## Локальный запуск
+
+```bash
+mvn clean install
+java -jar target/telegram-bot-1.0.0.jar
+```
+
+С переменными окружения:
+```bash
+export BOT_TOKEN=xxx
+export BOT_USERNAME=mybot
+export ADMIN_CHAT_ID=123
+export DATABASE_URL=postgresql://...
+
+mvn spring-boot:run
+```
+
+---
+
+# FAQ
+
+## Q: Как избежать конфликта "getUpdates: [409] Конфликт"?
+
+**A:** Убедись, что бот запущен только в одном месте. Если переходишь между локальным и Railway:
+- Останови локальный бот
+- Дождись завершения Railway деплоя
+- Или удали webhook: `https://api.telegram.org/bot<TOKEN>/deleteWebhook`
+
+## Q: Фото не сохраняются
+
+**A:** Проверь:
+- БД доступна: `/stats` показывает >0 картинок?
+- PostgreSQL запущен и доступен по `DATABASE_URL`
+- Логи: ищи "Картинка сохранена" в Railway логах
+
+## Q: Не работает автоотправка
+
+**A:**
+- Проверь время: `/time`
+- Убедись, есть получатели: `/recipients`
+- Есть что отправлять: `/queue` или `/stats`
+- Логи: ищи "checkAndSend" в Railway логах
+
+## Q: Как добавить получателей?
+
+**A:** Только админ может добавлять получателей:
+- `/addrecipient <chat_id>` — по ID
+- Получатель узнаёт свой ID командой `/chatid`
+
+## Q: Получатель не может выполнить /start
+
+**A:** Это нормально, если получатель уже добавлен админом. Получатель может:
+- Читать рассылку
+- Написать админу кнопкой "📬 Админу"
+- Выполнить `/chatid` для узнавания своего ID
+
+## Q: Как очистить очередь?
+
+**A:** Текущий функционал не поддерживает удаление отдельных элементов. Можно:
+- Отправить всё сразу `/now` много раз
+- Или удалить строки из БД напрямую
+
+## Q: Можно ли использовать webhook вместо polling?
+
+**A:** Текущая версия использует polling. Поддержка webhook может быть добавлена в будущем релизе.
+
+---
+
+# Контакты и поддержка
+
+- **Git:** https://github.com/keastayer-cell/bot_tg
+- **Railway:** Production на Railway
+- **Последнее обновление:** 5 апреля 2026
+
 
 
