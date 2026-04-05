@@ -311,12 +311,11 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                             "/delrecipient ID - удалить\n" +
                             "/time - время отправки\n" +
                             "/settime 14:00\n" +
-                            "/messages - список сообщений\n" +
-                            "/add текст\n" +
+                            "/add текст - добавить в очередь\n" +
+                            "/queue - показать очередь\n" +
+                            "/fillqueue - заполнить очередь\n" +
+                            "/stats - статистика\n" +
                             "/now - отправить сейчас\n" +
-                            "/images - список картинок\n" +
-                            "/sendimage N - отправить картинку #N\n" +
-                            "/sendimageall - все картинки\n" +
                             "/logs");
                     } else if (text.equals("📬 Админу")) {
                         sendMessage(chatId, "Вы админ! Используйте команды для рассылки.\n/add текст - добавить сообщение\n/now - отправить сейчас");
