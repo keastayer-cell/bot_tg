@@ -47,13 +47,15 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     private final MessageService messageService;
     private final ImageService imageService;
     private final QueueService queueService;
+    private final DiagramService diagramService;
     private final Random random = new Random();
 
-    public MyTelegramBot(ConfigService config, MessageService messageService, ImageService imageService, QueueService queueService) {
+    public MyTelegramBot(ConfigService config, MessageService messageService, ImageService imageService, QueueService queueService, DiagramService diagramService) {
         this.config = config;
         this.messageService = messageService;
         this.imageService = imageService;
         this.queueService = queueService;
+        this.diagramService = diagramService;
     }
 
     @PostConstruct
@@ -279,6 +281,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 handleStats(chatId);
             } else if (text.startsWith("/sendimage ")) {
                 handleSendImage(chatId, text);
+            } else if (text.equals("/diagram")) {
+                handleDiagram(chatId);
+            } else if (text.startsWith("/diagram ")) {
+                handleDiagramGenerate(chatId, text);
             } else if (text.equals("📬 Админу")) {
                 sendMessage(chatId, "Вы админ! Используйте команды для рассылки.\n/add текст - добавить сообщение\n/now - отправить сейчас");
             } else if (text.startsWith("/settime ")) {
@@ -591,6 +597,73 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 setLastSent(curMinute);
                 log.info("Автоотправка: {}", itemDesc);
             }
+        }
+    }
+
+    private void handleDiagram(String chatId) {
+        String help = """
+                🎨 Генератор диаграмм
+
+                Использование:
+                /diagram - показать эту справку
+                /diagram [текст диаграммы] - сгенерировать диаграмму
+
+                Формат: PlantUML (автоматически добавляются @startuml/@enduml)
+
+                Примеры:
+                ```
+                Админ -> Бот: /add Привет!
+                Бот -> QueueService: addText()
+                QueueService -> БД: INSERT
+                Бот -> Админ: ✓ Добавлено
+                ```
+
+                ```
+                participant Админ
+                participant Бот
+                participant БД
+
+                Админ -> Бот: /now
+                Бот -> QueueService: popFirst()
+                QueueService -> БД: SELECT + DELETE
+                Бот -> Подписчики: Отправка
+                ```
+                """;
+        sendMessage(chatId, help);
+    }
+
+    private void handleDiagramGenerate(String chatId, String text) {
+        try {
+            // Извлекаем текст диаграммы после "/diagram "
+            String diagramText = text.substring("/diagram ".length()).trim();
+
+            if (diagramText.isEmpty()) {
+                sendMessage(chatId, "❌ Укажите текст диаграммы после команды\nПример: /diagram Админ -> Бот: команда");
+                return;
+            }
+
+            if (!diagramService.isValidDiagramText(diagramText)) {
+                sendMessage(chatId, "❌ Текст не похож на диаграмму. Используйте стрелки -> или ключевые слова\n\n" + diagramService.getExamples());
+                return;
+            }
+
+            // Генерируем PNG изображение
+            byte[] pngData = diagramService.generateDiagramPng(diagramText);
+
+            // Отправляем как фото
+            InputFile photo = new InputFile(new java.io.ByteArrayInputStream(pngData), "diagram.png");
+            execute(SendPhoto.builder()
+                    .chatId(chatId)
+                    .photo(photo)
+                    .caption("🎨 Сгенерированная диаграмма")
+                    .build());
+
+            log.info("✓ Диаграмма отправлена админу: {} байт", pngData.length);
+
+        } catch (Exception e) {
+            log.error("Ошибка генерации диаграммы: {}", e.getMessage());
+            sendMessage(chatId, "❌ Ошибка генерации диаграммы: " + e.getMessage() +
+                "\n\nПопробуйте другой текст или используйте /diagram для справки");
         }
     }
 
