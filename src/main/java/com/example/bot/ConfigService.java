@@ -49,25 +49,25 @@ public class ConfigService {
 
     public List<String> getRecipients() {
         return recipientRepository.findAll().stream()
-                .map(Recipient::getUsername)
+                .map(Recipient::getRecipientId)
                 .collect(Collectors.toList());
     }
 
-    public void addRecipient(String username) {
-        if (recipientRepository.findByUsername(username).isEmpty()) {
+    public void addRecipient(String recipientId) {
+        if (recipientRepository.findByRecipientId(recipientId).isEmpty()) {
             Recipient recipient = new Recipient();
-            recipient.setUsername(username);
+            recipient.setRecipientId(recipientId);
             recipientRepository.save(recipient);
         }
     }
 
-    public void removeRecipient(String username) {
-        Optional<Recipient> recipient = recipientRepository.findByUsername(username);
+    public void removeRecipient(String recipientId) {
+        Optional<Recipient> recipient = recipientRepository.findByRecipientId(recipientId);
         recipient.ifPresent(recipientRepository::delete);
     }
 
-    public boolean isRecipient(String username) {
-        return recipientRepository.findByUsername(username).isPresent();
+    public boolean isRecipient(String recipientId) {
+        return recipientRepository.findByRecipientId(recipientId).isPresent();
     }
 
     public String getTimezone() {

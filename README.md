@@ -19,13 +19,18 @@ src/main/resources/
 ## Развёртывание на Railway
 
 1. Подключите репозиторий keastayer-cell/bot_tg
-2. Добавьте Volume: Mount Path `/app/data`, Size 1GB (для сохранения данных между deployments)
-3. Установите переменные окружения:
+2. Если доступен Volume, добавьте Mount Path `/app/data` для локальной H2-персистенции.
+3. Если Volume недоступен, подключите Railway PostgreSQL-плагин и задайте переменную `DATABASE_URL`.
+4. Установите переменные окружения:
    - `BOT_TOKEN`
    - `BOT_USERNAME`
    - `ADMIN_CHAT_ID`
-4. Добавьте Healthcheck Path: `/ping`
-5. Включите Serverless для экономии ресурсов
+   - `DATABASE_URL` (только если используете PostgreSQL)
+   - `SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect` (опционально для PostgreSQL)
+
+> Если используете PostgreSQL, Volume не обязателен: данные сохраняются во внешней базе.
+5. Добавьте Healthcheck Path: `/ping`
+6. Включите Serverless для экономии ресурсов
 
 ## Настройка
 
