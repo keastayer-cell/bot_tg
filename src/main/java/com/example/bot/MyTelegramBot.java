@@ -88,7 +88,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         // Обработка /start - для админа показываем команды, для обычных - подписка
         if (msg.hasText() && (msg.getText().equals("/start") || msg.getText().equals("🚀 Старт"))) {
-            log.info("ПОЛЬЗОВАТЕЛЬ {} нажал /start (isAdmin={})", chatIdStr, isAdmin);
+            log.info("ПОЛЬЗОВАТЕЛЬ {} (@{}) нажал /start (isAdmin={})", chatIdStr, userNameWithAt, isAdmin);
             if (isAdmin) {
                 // Админ - показываем все команды
                 sendMessageWithKeyboard(chatIdStr, "Привет, админ!\n\n" +
@@ -118,7 +118,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 // Обычный пользователь - подписываем по chatId
                 config.addRecipient(chatIdStr);
                 sendMessageWithKeyboard(chatIdStr, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
-                log.info("Пользователь {} подписался на рассылку", chatIdStr);
+                log.info("Пользователь {} (@{}) подписался на рассылку", chatIdStr, userNameWithAt);
             }
             return;
         }
@@ -127,7 +127,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         if (!isAdmin && !isRecipient) {
             if (msg.hasText()) {
-                log.info("ОТКАЗ: пользователь {} не в списке получателей", chatIdStr);
+                log.info("ОТКАЗ: пользователь {} (@{}) не в списке получателей", chatIdStr, userNameWithAt);
                 sendMessageWithKeyboard(chatIdStr, "Извините, вы не участник бота.\nСвяжитесь с администратором.");
             }
             return;
@@ -244,9 +244,9 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 handleAddText(chatId, text);
             } else if (text.startsWith("/addrecipient ")) {
                 handleAddRecipient(chatId, text);
+            } else if (text.equals("/chatid")) {
+                handleChatId(chatIdStr, userNameWithAt);
             } else if (text.startsWith("/settimezone ")) {
-                handleSetTimezone(chatId, text);
-            } else if (text.startsWith("/msg ")) {
                 handleMsg(chatId, text);
             }
         } catch (Exception e) {
@@ -407,15 +407,11 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         sendMessage(chatId, "Получатель удалён: " + recipient);
     }
 
-    private void handleSetTimezone(String chatId, String text) {
-        String timezone = text.substring(13).trim();
-        if (timezone.isEmpty()) {
-            sendMessage(chatId, "Укажите часовой пояс, например /settimezone Europe/Moscow");
-            return;
-        }
-        config.setTimezone(timezone);
-        sendMessage(chatId, "Часовой пояс установлен: " + timezone + ". Перезапустите бота для применения.");
+    private void handleChatId(String chatId, String userName) {
+        sendMessage(chatId, "Chat ID: " + chatId + "\nUsername: " + userName);
     }
+
+    private void handleSetTimezone(String chatId, String text) {
 
     private void handleMsg(String chatId, String text) {
         String msgText = text.substring(5);

@@ -59,6 +59,7 @@ last_sent=
 - `/delrecipient <ID>` - Удалить получателя
 - `/time` - Показать время отправки
 - `/settime <HH:MM>` - Установить время отправки
+- `/chatid` - Показать chat ID и username текущего чата
 - `/settimezone <timezone>` - Установить часовой пояс (например, Europe/Moscow)
 - `/now` - Отправить сейчас
 - `/messages` - Список текстов
