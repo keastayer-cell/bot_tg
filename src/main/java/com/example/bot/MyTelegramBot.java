@@ -88,6 +88,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         // Обработка /start - для админа показываем команды, для обычных - подписка
         if (msg.hasText() && (msg.getText().equals("/start") || msg.getText().equals("🚀 Старт"))) {
+            log.info("ПОЛЬЗОВАТЕЛЬ {} нажал /start (isAdmin={})", chatIdStr, isAdmin);
             if (isAdmin) {
                 // Админ - показываем все команды
                 sendMessageWithKeyboard(chatIdStr, "Привет, админ!\n\n" +
@@ -112,10 +113,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     "📜 *Прочее:*\n" +
                     "/messages - тексты\n" +
                     "/logs");
+                log.info("Админу {} отправлен список команд", chatIdStr);
             } else {
                 // Обычный пользователь - подписываем по chatId
                 config.addRecipient(chatIdStr);
                 sendMessageWithKeyboard(chatIdStr, "✨ *Добро пожаловать!*\n\nВы подписаны на рассылку.\nЖдите новые сообщения 📬");
+                log.info("Пользователь {} подписался на рассылку", chatIdStr);
             }
             return;
         }
@@ -124,6 +127,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
         if (!isAdmin && !isRecipient) {
             if (msg.hasText()) {
+                log.info("ОТКАЗ: пользователь {} не в списке получателей", chatIdStr);
                 sendMessageWithKeyboard(chatIdStr, "Извините, вы не участник бота.\nСвяжитесь с администратором.");
             }
             return;
@@ -140,8 +144,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         String text = msg.getText();
 
         if (isRecipient && !isAdmin) {
+            log.info("ПОЛУЧАТЕЛЬ {} отправил: {}", chatIdStr, text);
             handleRecipient(chatIdStr, userNameWithAt, text, adminId);
         } else if (isAdmin) {
+            log.info("АДМИН {} отправил команду: {}", chatIdStr, text);
             handleAdmin(chatIdStr, text);
         }
     }
