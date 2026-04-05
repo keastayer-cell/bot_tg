@@ -15,8 +15,8 @@ import java.util.UUID;
 public class ImageService {
 
     private static final Logger log = LoggerFactory.getLogger(ImageService.class);
-    private static final String IMAGES_DIR = "images";
-    private static final String IMAGES_INDEX = "images_index.txt";
+    private static final String IMAGES_DIR = "/app/data/images";
+    private static final String IMAGES_INDEX = "/app/data/images_index.txt";
 
     public ImageService() {
         new File(IMAGES_DIR).mkdirs();

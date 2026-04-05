@@ -8,7 +8,7 @@ import java.util.*;
 
 @Component
 public class QueueService {
-    private static final String QUEUE_FILE = "queue.txt";
+    private static final String QUEUE_FILE = "/app/data/queue.txt";
     private final MessageService messageService;
     private final ImageService imageService;
     private final Random random = new Random();

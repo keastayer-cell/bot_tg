@@ -8,8 +8,8 @@ import java.util.*;
 
 @Component
 public class ConfigService {
-    protected String configFile = "config.properties";
-    protected String recipientsFile = "recipients.txt";
+    protected String configFile = "/app/data/config.properties";
+    protected String recipientsFile = "/app/data/recipients.txt";
     private Properties props = new Properties();
 
     @Value("${admin-chat-id:}")

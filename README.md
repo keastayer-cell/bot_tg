@@ -16,17 +16,16 @@ src/main/resources/
 └── application.properties    # Настройки приложения
 ```
 
-## Сборка
+## Развёртывание на Railway
 
-```bash
-mvn clean package
-```
-
-## Запуск
-
-```bash
-java -jar target/telegram-bot-1.0.0.jar
-```
+1. Подключите репозиторий keastayer-cell/bot_tg
+2. Добавьте Volume: Mount Path `/app/data`, Size 1GB (для сохранения данных между deployments)
+3. Установите переменные окружения:
+   - `BOT_TOKEN`
+   - `BOT_USERNAME`
+   - `ADMIN_CHAT_ID`
+4. Добавьте Healthcheck Path: `/ping`
+5. Включите Serverless для экономии ресурсов
 
 ## Настройка
 

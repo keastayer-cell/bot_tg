@@ -10,7 +10,7 @@ import java.util.List;
 
 @Component
 public class MessageService {
-    private static final String MESSAGES_FILE = "messages.txt";
+    private static final String MESSAGES_FILE = "/app/data/messages.txt";
 
     public List<String> loadMessages() {
         List<String> messages = new ArrayList<>();

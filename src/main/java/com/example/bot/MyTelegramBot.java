@@ -310,15 +310,19 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private void handleSendImageAll(String chatId) {
         List<String> imgs = imageService.getImageNames();
+        log.info("sendimageall: картинок {}", imgs.size());
+        List<String> recipients = getRecipients();
+        log.info("sendimageall: получателей {}", recipients.size());
+        
         if (imgs.isEmpty()) {
             sendMessage(chatId, "Нет картинок для отправки");
-        } else if (getRecipients().isEmpty()) {
+        } else if (recipients.isEmpty()) {
             sendMessage(chatId, "Нет получателей");
         } else {
             for (String imgName : imgs) {
                 InputFile img = imageService.getImageInputFile(imgName);
                 if (img != null) {
-                    for (String r : getRecipients()) {
+                    for (String r : recipients) {
                         sendPhoto(r, img);
                     }
                 }
