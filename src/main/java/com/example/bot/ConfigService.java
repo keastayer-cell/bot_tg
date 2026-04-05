@@ -8,8 +8,8 @@ import java.util.*;
 
 @Component
 public class ConfigService {
-    private final String configFile = "config.properties";
-    private final String recipientsFile = "recipients.txt";
+    protected String configFile = "config.properties";
+    protected String recipientsFile = "recipients.txt";
     private Properties props = new Properties();
 
     @Value("${admin-chat-id:}")
@@ -103,6 +103,14 @@ public class ConfigService {
         if (changed) {
             saveRecipients(list);
         }
+    }
+
+    public String getTimezone() {
+        return get("timezone", "Europe/Moscow");
+    }
+
+    public void setTimezone(String timezone) {
+        set("timezone", timezone);
     }
 
     private synchronized void saveRecipients(List<String> list) {

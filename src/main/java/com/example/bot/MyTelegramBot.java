@@ -214,156 +214,43 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
     private void handleAdmin(String chatId, String text) {
         try {
-            switch (text) {
-                case "/recipients":
-                    
-                    if (getRecipients().isEmpty()) {
-                        sendMessage(chatId, "Нет получателей!\n/addrecipient ID или @nick", "admin-recipients-empty");
-                    } else {
-                        StringBuilder sb = new StringBuilder("Получатели:\n");
-                        for (int i = 0; i < getRecipients().size(); i++) {
-                            sb.append(i + 1).append(". ").append(getRecipients().get(i)).append("\n");
-                        }
-                        sendMessage(chatId, sb.toString(), "admin-recipients-list");
-                    }
-                    break;
-
-                case "/time":
-                    sendMessage(chatId, "Время отправки: " + getTime(), "admin-time");
-                    break;
-
-                case "/messages":
-                    List<String> msgs = messageService.loadMessages();
-                    if (msgs.isEmpty()) sendMessage(chatId, "Пусто");
-                    else {
-                        StringBuilder sb = new StringBuilder("Сообщений: ").append(msgs.size()).append("\n");
-                        for (int i = 0; i < Math.min(10, msgs.size()); i++) sb.append(i + 1).append(". ").append(msgs.get(i)).append("\n");
-                        sendMessage(chatId, sb.toString());
-                    }
-                    break;
-
-                case "/now":
-                    sendNow(chatId);
-                    break;
-
-                case "/logs":
-                    sendLogs(chatId);
-                    break;
-
-                case "/images":
-                    List<String> images = imageService.getImageNames();
-                    if (images.isEmpty()) {
-                        sendMessage(chatId, "Нет сохранённых картинок.\nОтправьте фото боту, чтобы сохранить.");
-                    } else {
-                        int count = images.size();
-                        sendMessage(chatId, "Сохранённые картинки (" + count + "):\n" +
-                            "Чтобы отправить: /sendimage 1\n(или /sendimageall для всем)");
-                    }
-                    break;
-
-                case "/sendimageall":
-                    List<String> imgs = imageService.getImageNames();
-                    
-                    if (imgs.isEmpty()) {
-                        sendMessage(chatId, "Нет картинок для отправки");
-                    } else if (getRecipients().isEmpty()) {
-                        sendMessage(chatId, "Нет получателей");
-                    } else {
-                        for (String imgName : imgs) {
-                            InputFile img = imageService.getImageInputFile(imgName);
-                            if (img != null) {
-                                for (String r : getRecipients()) {
-                                    sendPhoto(r, img);
-                                }
-                            }
-                        }
-                        sendMessage(chatId, "Отправлено " + imgs.size() + " картинок всем получателям");
-                    }
-                    break;
-
-                case "/queue":
-                    sendMessage(chatId, queueService.getQueueList());
-                    break;
-
-                case "/fillqueue":
-                    queueService.addFromTextsAndImages();
-                    int qSize = queueService.getQueueSize();
-                    sendMessage(chatId, "Очередь заполнена! Всего в очереди: " + qSize);
-                    break;
-
-                case "/stats":
-                    int txtCount = queueService.getTextCount();
-                    int imgCount = queueService.getImageCount();
-                    int queueCount = queueService.getQueueSize();
-                    sendMessage(chatId, "Статистика:\n" +
-                        "Текстов: " + txtCount + "\n" +
-                        "Картинок: " + imgCount + "\n" +
-                        "В очереди: " + queueCount + "\n\n" +
-                        "Отправь /fillqueue чтобы заполнить очередь из текстов и картинок");
-                    break;
-
-                default:
-                    if (text.startsWith("/sendimage ")) {
-                        int idx;
-                        try {
-                            idx = Integer.parseInt(text.substring(11)) - 1;
-                        } catch (NumberFormatException e) {
-                            sendMessage(chatId, "Используйте: /sendimage 1");
-                            return;
-                        }
-                        List<String> allImages = imageService.getImageNames();
-                        if (idx < 0 || idx >= allImages.size()) {
-                            sendMessage(chatId, "Нет такой картинки. Всего: " + allImages.size());
-                            return;
-                        }
-                        String imgName = allImages.get(idx);
-                        InputFile img = imageService.getImageInputFile(imgName);
-                        
-                        if (getRecipients().isEmpty()) {
-                            sendMessage(chatId, "Нет получателей");
-                            return;
-                        }
-                        for (String r : getRecipients()) {
-                            sendPhoto(r, img);
-                        }
-                        sendMessage(chatId, "Отправлено: " + imgName);
-                    } else if (text.equals("📬 Админу")) {
-                        sendMessage(chatId, "Вы админ! Используйте команды для рассылки.\n/add текст - добавить сообщение\n/now - отправить сейчас");
-                        break;
-                    } else if (text.startsWith("/settime ")) {
-                        String newTime = text.substring(9).replace("-", ":");
-                        if (!newTime.matches("^\\d{1,2}:\\d{2}$")) {
-                            sendMessage(chatId, "Неверный формат времени. Используйте HH:MM, например /settime 14:00");
-                            return;
-                        }
-                        setTime(newTime);
-                        sendMessage(chatId, "Время: " + getTime());
-                    } else if (text.startsWith("/add ")) {
-                        String txt = text.substring(5);
-                        queueService.addText(txt);
-                        sendMessage(chatId, "Добавлено в очередь! Всего: " + queueService.getQueueSize());
-                    } else if (text.startsWith("/addrecipient ")) {
-                        String recipient = text.substring(14).trim();
-                        // Только числа - chatId
-                        if (!recipient.matches("^\\d+$")) {
-                            sendMessage(chatId, "Введите chat ID: /addrecipient 123456789");
-                            return;
-                        }
-                        config.addRecipient(recipient);
-                        sendMessage(chatId, "Получатель добавлен: " + recipient);
-                    } else if (text.startsWith("/delrecipient ")) {
-                        config.removeRecipient(text.substring(14));
-                        sendMessage(chatId, "Получатель удалён");
-                    } else if (text.startsWith("/msg ")) {
-                        String msgText = text.substring(5);
-                        for (String r : getRecipients()) {
-                            sendMessage(r, msgText);
-                        }
-                        sendMessage(chatId, "Отправлено всем");
-                    }
+            if (text.equals("/recipients")) {
+                handleRecipients(chatId);
+            } else if (text.equals("/time")) {
+                handleTime(chatId);
+            } else if (text.equals("/messages")) {
+                handleMessages(chatId);
+            } else if (text.equals("/now")) {
+                sendNow(chatId);
+            } else if (text.equals("/logs")) {
+                sendLogs(chatId);
+            } else if (text.equals("/images")) {
+                handleImages(chatId);
+            } else if (text.equals("/sendimageall")) {
+                handleSendImageAll(chatId);
+            } else if (text.equals("/queue")) {
+                handleQueue(chatId);
+            } else if (text.equals("/fillqueue")) {
+                handleFillQueue(chatId);
+            } else if (text.equals("/stats")) {
+                handleStats(chatId);
+            } else if (text.startsWith("/sendimage ")) {
+                handleSendImage(chatId, text);
+            } else if (text.equals("📬 Админу")) {
+                sendMessage(chatId, "Вы админ! Используйте команды для рассылки.\n/add текст - добавить сообщение\n/now - отправить сейчас");
+            } else if (text.startsWith("/settime ")) {
+                handleSetTime(chatId, text);
+            } else if (text.startsWith("/add ")) {
+                handleAddText(chatId, text);
+            } else if (text.startsWith("/addrecipient ")) {
+                handleAddRecipient(chatId, text);
+            } else if (text.startsWith("/settimezone ")) {
+                handleSetTimezone(chatId, text);
+            } else if (text.startsWith("/msg ")) {
+                handleMsg(chatId, text);
             }
         } catch (Exception e) {
-            log.error("Ошибка: {}", e.getMessage());
+            log.error("Ошибка обработки команды админа: {}", e.getMessage());
         }
     }
 
@@ -377,6 +264,169 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {
             log.error("Ошибка отправки сообщения {} в {}: {}", context, chatId, e.getMessage());
         }
+    }
+
+    private void handleRecipients(String chatId) {
+        if (getRecipients().isEmpty()) {
+            sendMessage(chatId, "Нет получателей!\n/addrecipient ID или @nick", "admin-recipients-empty");
+        } else {
+            StringBuilder sb = new StringBuilder("Получатели:\n");
+            for (int i = 0; i < getRecipients().size(); i++) {
+                sb.append(i + 1).append(". ").append(getRecipients().get(i)).append("\n");
+            }
+            sendMessage(chatId, sb.toString(), "admin-recipients-list");
+        }
+    }
+
+    private void handleTime(String chatId) {
+        sendMessage(chatId, "Время отправки: " + getTime(), "admin-time");
+    }
+
+    private void handleMessages(String chatId) {
+        List<String> msgs = messageService.loadMessages();
+        if (msgs.isEmpty()) {
+            sendMessage(chatId, "Пусто");
+        } else {
+            StringBuilder sb = new StringBuilder("Сообщений: ").append(msgs.size()).append("\n");
+            for (int i = 0; i < Math.min(10, msgs.size()); i++) {
+                sb.append(i + 1).append(". ").append(msgs.get(i)).append("\n");
+            }
+            sendMessage(chatId, sb.toString());
+        }
+    }
+
+    private void handleImages(String chatId) {
+        List<String> images = imageService.getImageNames();
+        if (images.isEmpty()) {
+            sendMessage(chatId, "Нет сохранённых картинок.\nОтправьте фото боту, чтобы сохранить.");
+        } else {
+            int count = images.size();
+            sendMessage(chatId, "Сохранённые картинки (" + count + "):\n" +
+                "Чтобы отправить: /sendimage 1\n(или /sendimageall для всем)");
+        }
+    }
+
+    private void handleSendImageAll(String chatId) {
+        List<String> imgs = imageService.getImageNames();
+        if (imgs.isEmpty()) {
+            sendMessage(chatId, "Нет картинок для отправки");
+        } else if (getRecipients().isEmpty()) {
+            sendMessage(chatId, "Нет получателей");
+        } else {
+            for (String imgName : imgs) {
+                InputFile img = imageService.getImageInputFile(imgName);
+                if (img != null) {
+                    for (String r : getRecipients()) {
+                        sendPhoto(r, img);
+                    }
+                }
+            }
+            sendMessage(chatId, "Отправлено " + imgs.size() + " картинок всем получателям");
+        }
+    }
+
+    private void handleQueue(String chatId) {
+        sendMessage(chatId, queueService.getQueueList());
+    }
+
+    private void handleFillQueue(String chatId) {
+        queueService.addFromTextsAndImages();
+        int qSize = queueService.getQueueSize();
+        sendMessage(chatId, "Очередь заполнена! Всего в очереди: " + qSize);
+    }
+
+    private void handleStats(String chatId) {
+        int txtCount = queueService.getTextCount();
+        int imgCount = queueService.getImageCount();
+        int queueCount = queueService.getQueueSize();
+        sendMessage(chatId, "Статистика:\n" +
+            "Текстов: " + txtCount + "\n" +
+            "Картинок: " + imgCount + "\n" +
+            "В очереди: " + queueCount + "\n\n" +
+            "Отправь /fillqueue чтобы заполнить очередь из текстов и картинок");
+    }
+
+    private void handleSendImage(String chatId, String text) {
+        int idx;
+        try {
+            idx = Integer.parseInt(text.substring(11)) - 1;
+        } catch (NumberFormatException e) {
+            sendMessage(chatId, "Используйте: /sendimage 1");
+            return;
+        }
+        List<String> allImages = imageService.getImageNames();
+        if (idx < 0 || idx >= allImages.size()) {
+            sendMessage(chatId, "Нет такой картинки. Всего: " + allImages.size());
+            return;
+        }
+        String imgName = allImages.get(idx);
+        InputFile img = imageService.getImageInputFile(imgName);
+        if (getRecipients().isEmpty()) {
+            sendMessage(chatId, "Нет получателей");
+            return;
+        }
+        for (String r : getRecipients()) {
+            sendPhoto(r, img);
+        }
+        sendMessage(chatId, "Отправлено: " + imgName);
+    }
+
+    private void handleSetTime(String chatId, String text) {
+        String newTime = text.substring(9).replace("-", ":");
+        if (!newTime.matches("^\\d{1,2}:\\d{2}$")) {
+            sendMessage(chatId, "Неверный формат времени. Используйте HH:MM, например /settime 14:00");
+            return;
+        }
+        setTime(newTime);
+        sendMessage(chatId, "Время: " + getTime());
+    }
+
+    private void handleAddText(String chatId, String text) {
+        String txt = text.substring(5);
+        if (txt.trim().isEmpty()) {
+            sendMessage(chatId, "Текст не может быть пустым");
+            return;
+        }
+        queueService.addText(txt);
+        sendMessage(chatId, "Добавлено в очередь! Всего: " + queueService.getQueueSize());
+    }
+
+    private void handleAddRecipient(String chatId, String text) {
+        String recipient = text.substring(14).trim();
+        if (!recipient.matches("^\\d+$")) {
+            sendMessage(chatId, "Введите chat ID: /addrecipient 123456789");
+            return;
+        }
+        config.addRecipient(recipient);
+        sendMessage(chatId, "Получатель добавлен: " + recipient);
+    }
+
+    private void handleDelRecipient(String chatId, String text) {
+        String recipient = text.substring(14).trim();
+        config.removeRecipient(recipient);
+        sendMessage(chatId, "Получатель удалён: " + recipient);
+    }
+
+    private void handleSetTimezone(String chatId, String text) {
+        String timezone = text.substring(13).trim();
+        if (timezone.isEmpty()) {
+            sendMessage(chatId, "Укажите часовой пояс, например /settimezone Europe/Moscow");
+            return;
+        }
+        config.setTimezone(timezone);
+        sendMessage(chatId, "Часовой пояс установлен: " + timezone + ". Перезапустите бота для применения.");
+    }
+
+    private void handleMsg(String chatId, String text) {
+        String msgText = text.substring(5);
+        if (msgText.trim().isEmpty()) {
+            sendMessage(chatId, "Сообщение не может быть пустым");
+            return;
+        }
+        for (String r : getRecipients()) {
+            sendMessage(r, msgText);
+        }
+        sendMessage(chatId, "Отправлено всем");
     }
 
     private void sendPhoto(String chatId, InputFile photo) {

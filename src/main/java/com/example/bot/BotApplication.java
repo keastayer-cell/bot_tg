@@ -15,13 +15,17 @@ public class BotApplication {
     private static final Logger log = LoggerFactory.getLogger(BotApplication.class);
 
     public static void main(String[] args) {
-        // Устанавливаем московский часовой пояс
-        System.setProperty("user.timezone", "Europe/Moscow");
         SpringApplication.run(BotApplication.class, args);
     }
 
     @Bean
     public CommandLineRunner initConfig(ConfigService config) {
-        return args -> config.init();
+        return args -> {
+            config.init();
+            // Устанавливаем часовой пояс
+            String timezone = config.getTimezone();
+            System.setProperty("user.timezone", timezone);
+            log.info("Установлен часовой пояс: {}", timezone);
+        };
     }
 }
