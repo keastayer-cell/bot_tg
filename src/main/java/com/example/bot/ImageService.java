@@ -1,39 +1,38 @@
 package com.example.bot;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Component
 public class ImageService {
+
+    private static final Logger log = LoggerFactory.getLogger(ImageService.class);
     private static final String IMAGES_DIR = "images";
     private static final String IMAGES_INDEX = "images_index.txt";
 
     public ImageService() {
-        // Создаём папку для картинок
         new File(IMAGES_DIR).mkdirs();
     }
 
     public String saveImage(Message message, String fileId, String fileExtension) {
         try {
             String uniqueName = UUID.randomUUID().toString().substring(0, 8) + fileExtension;
-            String filePath = IMAGES_DIR + "/" + uniqueName;
-            
-            // Сохраняем ID файла для дальнейшего использования
-            // (Telegram хранит file_id, который можно использовать повторно)
+
+            // Сохраняем fileId в индексный файл
             saveToIndex(uniqueName, fileId);
-            
+            log.info("Картинка сохранена: {} -> {}", uniqueName, fileId);
+
             return uniqueName;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Ошибка сохранения картинки: {}", e.getMessage());
             return null;
         }
     }
@@ -63,11 +62,30 @@ public class ImageService {
 
     public List<String> getImageNames() {
         List<String> names = new ArrayList<>();
+
+        // Сначала проверяем индексный файл (где хранятся fileId)
+        File indexFile = new File(IMAGES_INDEX);
+        if (indexFile.exists()) {
+            try (BufferedReader r = new BufferedReader(new FileReader(IMAGES_INDEX))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    if (line.contains("=")) {
+                        names.add(line.split("=")[0]);
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("Ошибка чтения индекса: {}", e.getMessage());
+            }
+        }
+
+        // Также проверяем папку с файлами
         File dir = new File(IMAGES_DIR);
         File[] files = dir.listFiles((d, name) -> !name.startsWith("."));
         if (files != null) {
             for (File f : files) {
-                names.add(f.getName());
+                if (!names.contains(f.getName())) {
+                    names.add(f.getName());
+                }
             }
         }
         return names;
