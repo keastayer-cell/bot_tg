@@ -17,7 +17,7 @@ public class ConfigService {
     private String adminChatIdFromEnv;
 
     @Autowired
-    private RecipientRepository recipientRepository;
+    RecipientRepository recipientRepository;
 
     public void init() {
         if (adminChatIdFromEnv != null && !adminChatIdFromEnv.isEmpty()) {
